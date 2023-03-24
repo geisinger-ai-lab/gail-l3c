@@ -8,14 +8,9 @@ Implement the sql steps as functions that take in dataframes
 
 """
 
-import pandas as pd
-
 from pyspark.sql import functions as F
 
-from somewhere_dbd import rename_cols
-
-def get_concept_set_members():
-    pass
+from global_utils import rename_cols
 
 def get_meds_concepts(concept_set_members):
     """
@@ -88,14 +83,43 @@ from concept_set_members csm
 where csm.codeset_id = 339287218 -- paxlovid (v1)"""
     pass
 
+
 def get_drug_exposure(drug_exposure_path):
     """
     Get either the train or test drug exposure table
+
+    columns:
+    person_id,
+    drug_exposure_id,
+    data_partner_id,
+    days_supply,
+    dose_unit_source_value,
+    drug_exposure_end_date,
+    drug_exposure_end_datetime,
+    drug_exposure_start_date,
+    drug_exposure_start_datetime,
+    drug_source_value,
+    lot_number,
+    provider_id,
+    quantity,
+    refills,
+    route_source_value,
+    sig,
+    stop_reason,
+    verbatim_end_date,
+    visit_detail_id,
+    visit_occurrence_id,
+    drug_concept_id,
+    drug_source_concept_id,
+    drug_type_concept_id,
+    route_concept_id,
+    drug_concept_name,
+    drug_source_concept_name,
+    drug_type_concept_name,
+    route_concept_name
     """
     pass
 
-def get_index_range(index_range_path):
-    pass
 
 def filter_meds(index_range, meds_concepts, drug_exposure):
     sql = """select
@@ -119,7 +143,7 @@ where mc.feature_name is not null
 """
     pass
 
-def group_meds():
+def group_meds(meds_filtered):
     sql = """select 
     m.person_id
     , m.before_or_after_index
@@ -135,7 +159,7 @@ group by
     , m.feature_name"""
     pass 
 
-def Meds_dataset_v1(meds_grouped):
+def meds_dataset(meds_grouped):
     """
     Meds grouped needs to be a PySpark function
     also need to have imported rename_cols from global somewhere 
@@ -173,4 +197,9 @@ def get_meds_dataset(concept_set_members, drug_exposure, index_range):
     Returns formatted meds features
     """
     
-    pass
+    meds_concepts = get_meds_concepts(concept_set_members)
+    meds_filtered = filter_meds(index_range, meds_concepts, drug_exposure)
+    meds_grouped = group_meds(meds_filtered)
+    meds_df = meds_dataset(meds_grouped)
+
+    return meds_df

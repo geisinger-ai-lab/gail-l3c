@@ -11,7 +11,8 @@
 | Procedures     | procedure   | Tamanna
 | Utilization    | visit       | Grant
 | Medications    | drug        | Elliot
-| Smoking Status |observation) | Elliot
+| Smoking Status | observation | Elliot
+| Index Range    | micro/macro | Grant
 
 Model train/test: Gaurav
 
