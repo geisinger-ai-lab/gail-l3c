@@ -697,39 +697,6 @@ def Measurements_features_before(measurements_standard_features_final):
     
 
 @transform_pandas(
-    Output(rid="ri.foundry.main.dataset.d2c55b64-b2ff-485c-beac-e5b5ac108940"),
-    meds_grouped=Input(rid="ri.foundry.main.dataset.a9c6a2e1-4269-4b30-b475-4160cf9007af")
-)
-def Meds_dataset_v1(meds_grouped):
-    
-    # Split by templorality
-    meds_before = meds_grouped.filter(meds_grouped.before_or_after_index == "before") 
-    meds_during = meds_grouped.filter(meds_grouped.before_or_after_index == "during")
-    meds_after  = meds_grouped.filter(meds_grouped.before_or_after_index == "after")
-
-    # Count up the number of each medication feature
-    meds_counts_before = meds_before.groupBy(["person_id", "before_or_after_index"]).pivot("feature_name").agg(F.first("med_count"))
-    meds_counts_during = meds_during.groupBy(["person_id", "before_or_after_index"]).pivot("feature_name").agg(F.first("med_count"))
-    meds_counts_after  = meds_after.groupBy(["person_id", "before_or_after_index"]).pivot("feature_name").agg(F.first("med_count"))
-
-    # Change column names to add prefix using global function rename_cols()
-    meds_counts_before = rename_cols(meds_counts_before, suffix="_before")
-    meds_counts_during = rename_cols(meds_counts_during, suffix="_during")
-    meds_counts_after  = rename_cols(meds_counts_after,  suffix="_after")
-
-    # Outer join the 3 together on person_id
-    meds_df = meds_counts_before\
-                .join(meds_counts_during, on=("person_id"), how="outer")\
-                .join(meds_counts_after,  on=("person_id"), how="outer")
-    
-    # NA is interpreted as no instance of that med
-    meds_df = meds_df.fillna(0)
-
-    return meds_df
-
-    
-
-@transform_pandas(
     Output(rid="ri.foundry.main.dataset.a2f26681-acd9-4fca-9a65-73a9562c7697"),
     procedure_time_pivoted=Input(rid="ri.foundry.main.dataset.56726a0b-fd5f-40e4-b017-bf497bc12c0a")
 )
