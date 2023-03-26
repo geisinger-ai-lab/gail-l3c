@@ -8,9 +8,8 @@ Implement the sql steps as functions that take in dataframes
 
 """
 
-from pyspark.sql import functions as F
-
 from global_utils import rename_cols
+from pyspark.sql import functions as F
 
 
 def get_vitals_concepts(concept_set_members):
@@ -36,6 +35,7 @@ where csm.codeset_id = 510707388 -- Respiratory rate (LG33055-1 and SNOMED)
 ;
 """
     pass
+
 
 def get_measurement(meas_path):
     """
@@ -72,6 +72,7 @@ def get_measurement(meas_path):
     harmonized_value_as_number
     """
     pass
+
 
 def filter_vitals(vitals_concepts, index_range, measurement):
     sql = """select 
@@ -111,6 +112,7 @@ where
 """
     pass
 
+
 def group_vitals(vitals_filtered):
     sql = """
 @transform_pandas(
@@ -133,22 +135,32 @@ group by v.person_id, v.feature_name, v.before_or_after_index
 
 def vitals_dataset(vitals_grouped):
     # Pivot on feature_name
-    vitals_pivoted = vitals_grouped.groupBy(["person_id", "before_or_after_index"]).pivot("feature_name").agg(F.first("vital_avg").alias("vital_avg"))#, F.first("vital_stddev").alias("vital_stddev"))
-    
+    vitals_pivoted = (
+        vitals_grouped.groupBy(["person_id", "before_or_after_index"])
+        .pivot("feature_name")
+        .agg(F.first("vital_avg").alias("vital_avg"))
+    )  # , F.first("vital_stddev").alias("vital_stddev"))
+
     # Break into 3 dfs (before, during, after)
-    vitals_pivoted_before = vitals_pivoted.filter(vitals_pivoted.before_or_after_index == "before") 
-    vitals_pivoted_during = vitals_pivoted.filter(vitals_pivoted.before_or_after_index == "during")
-    vitals_pivoted_after  = vitals_pivoted.filter(vitals_pivoted.before_or_after_index == "after")
+    vitals_pivoted_before = vitals_pivoted.filter(
+        vitals_pivoted.before_or_after_index == "before"
+    )
+    vitals_pivoted_during = vitals_pivoted.filter(
+        vitals_pivoted.before_or_after_index == "during"
+    )
+    vitals_pivoted_after = vitals_pivoted.filter(
+        vitals_pivoted.before_or_after_index == "after"
+    )
 
     # Change column names to add prefix using global function rename_cols()
     vitals_pivoted_before = rename_cols(vitals_pivoted_before, suffix="_before")
     vitals_pivoted_during = rename_cols(vitals_pivoted_during, suffix="_during")
-    vitals_pivoted_after  = rename_cols(vitals_pivoted_after,  suffix="_after")
+    vitals_pivoted_after = rename_cols(vitals_pivoted_after, suffix="_after")
 
     # Outer join the 3 together on person_id
-    vitals_df = vitals_pivoted_before\
-                    .join(vitals_pivoted_during, on=("person_id"), how="outer")\
-                    .join(vitals_pivoted_after,  on=("person_id"), how="outer")
+    vitals_df = vitals_pivoted_before.join(
+        vitals_pivoted_during, on=("person_id"), how="outer"
+    ).join(vitals_pivoted_after, on=("person_id"), how="outer")
 
     return vitals_df
 
@@ -159,7 +171,7 @@ def get_vitals_dataset(concept_set_members, drug_exposure, index_range):
 
     Returns formatted vitals features
     """
-    
+
     vitals_concepts = get_vitals_concepts(concept_set_members)
     vitals_filtered = filter_vitals(index_range, vitals_concepts, drug_exposure)
     vitals_grouped = group_vitals(vitals_filtered)

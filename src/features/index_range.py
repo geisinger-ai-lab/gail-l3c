@@ -1,5 +1,3 @@
-
-
 # Long Covid Silver Standard
 """
 SELECT person_id, covid_index, pasc_code_after_four_weeks, pasc_code_prior_four_weeks, time_to_pasc

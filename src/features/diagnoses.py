@@ -1,4 +1,3 @@
-
 # Condition_occurence
 """
 @transform_pandas(
@@ -69,26 +68,32 @@ SELECT *
 
 """
 
-#from pyspark.sql.functions import expr
+# from pyspark.sql.functions import expr
+
 
 def Cohort_dx_ct_features(COHORT_DIAGNOSIS_CURATED):
     ## Initialize the input with the table:
     df = COHORT_DIAGNOSIS_CURATED
 
-    ## Rename measurement concept name for future use: 
+    ## Rename measurement concept name for future use:
     name_dict = {
         "DIABETES COMPLICATED": "diabetes_complicated",
         "DIABETES UNCOMPLICATED": "diabetes_uncomplicated",
         "[VSAC] Asthma ": "asthma",
         "[L3C][GAIL] COPD": "copd",
-        'HYPERTENSION': 'hypertension', 
-        'HEART FAILURE': 'heart_failure',  
-        'OBESITY': 'obesity', 
-        'TOBACCO SMOKER': 'tobacco_smoker'
-    } 
-    df = df.replace(to_replace=name_dict, subset=['concept_set_name'])
+        "HYPERTENSION": "hypertension",
+        "HEART FAILURE": "heart_failure",
+        "OBESITY": "obesity",
+        "TOBACCO SMOKER": "tobacco_smoker",
+    }
+    df = df.replace(to_replace=name_dict, subset=["concept_set_name"])
 
     ## Pivoting the table and gathering the related diagnosis count:
-    pivotDF = df.groupBy(["person_id"]).pivot("concept_set_name").agg(F.count("concept_set_name").alias("count")).na.fill(0)
-    
+    pivotDF = (
+        df.groupBy(["person_id"])
+        .pivot("concept_set_name")
+        .agg(F.count("concept_set_name").alias("count"))
+        .na.fill(0)
+    )
+
     return pivotDF

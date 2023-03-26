@@ -1,13 +1,13 @@
-
 def get_smoking_concepts(concept_set_members):
     sql = """SELECT *, 'smoker' as feature_name
 FROM concept_set_members
 where codeset_id = 628969102 -- TOBACCO SMOKER (v2)
 """
 
+
 def get_observation(obs_path):
     """
-    columns:  
+    columns:
     person_id,
     measurement_id,
     measurement_date,
@@ -41,12 +41,14 @@ def get_observation(obs_path):
     """
     pass
 
+
 def get_smoking_observations(observation, smoking_concepts):
     sql = """SELECT o.person_id, o.observation_date, o.observation_concept_id, o.observation_concept_name, s.feature_name
 FROM observation_merge o
 left join smoking_concepts s on s.concept_id = o.observation_concept_id
 where s.feature_name is not null
 """
+
 
 def smoking_status_dataset(smoking_observations):
     sql = """

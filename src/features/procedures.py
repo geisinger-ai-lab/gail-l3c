@@ -1,5 +1,3 @@
-
-
 # Procedure Occurence
 """
 @transform_pandas(
@@ -85,28 +83,45 @@ ORDER BY pmc.person_id
 
 def procedure_time_pivoted(All_procedure_with_time):
     data = All_procedure_with_time
-    pivoted_data = data.groupBy(["person_id","feature_time_index"]).pivot("concept_set_name").agg(F.count("procedure_concept_name").alias("Procedure_count")).na.fill(0)
+    pivoted_data = (
+        data.groupBy(["person_id", "feature_time_index"])
+        .pivot("concept_set_name")
+        .agg(F.count("procedure_concept_name").alias("Procedure_count"))
+        .na.fill(0)
+    )
 
-    
     renames = {
-    "[ICU/MODS]IMV": "Ventilator_used",
-    "Computed Tomography (CT) Scan": "Lungs_CT_scan",
-    "Chest x-ray": "Chest_X_ray",
-    "Lung Ultrasound": "Lung_Ultrasound",
-    "Kostka - ECMO": "ECMO_performed",
-    "echocardiogram_performed": "Echocardiogram_performed",
-    "ECG_procedure": "ECG_performed",
-    "Blood transfusion": "Blood_transfusion"    
-}
+        "[ICU/MODS]IMV": "Ventilator_used",
+        "Computed Tomography (CT) Scan": "Lungs_CT_scan",
+        "Chest x-ray": "Chest_X_ray",
+        "Lung Ultrasound": "Lung_Ultrasound",
+        "Kostka - ECMO": "ECMO_performed",
+        "echocardiogram_performed": "Echocardiogram_performed",
+        "ECG_procedure": "ECG_performed",
+        "Blood transfusion": "Blood_transfusion",
+    }
 
     for colname, rename in renames.items():
-        pivoted_data  = pivoted_data .withColumnRenamed(colname, rename)
+        pivoted_data = pivoted_data.withColumnRenamed(colname, rename)
 
     return pivoted_data
 
 
-def Procedure_timeindex_dataset_V1( procedure_time_pivoted):
-   df =  procedure_time_pivoted
-   df1 = df.groupBy("person_id"). pivot("feature_time_index"). agg(F.max("Ventilator_used").alias('Ventilator_used'),F.max('Lungs_CT_scan').alias('Lungs_CT_scan'),F.max('Chest_X_ray').alias('Chest_X_ray'),F.max('Lung_Ultrasound').alias('Lung_Ultrasound'),F.max('ECMO_performed').alias('ECMO_performed'),F.max('ECG_performed').alias('ECG_performed'), F.max('Echocardiogram_performed').alias('Echocardiogram_performed'),F.max('Blood_transfusion').alias('Blood_transfusion')).na.fill(0)
-   return df1
-    
+def Procedure_timeindex_dataset_V1(procedure_time_pivoted):
+    df = procedure_time_pivoted
+    df1 = (
+        df.groupBy("person_id")
+        .pivot("feature_time_index")
+        .agg(
+            F.max("Ventilator_used").alias("Ventilator_used"),
+            F.max("Lungs_CT_scan").alias("Lungs_CT_scan"),
+            F.max("Chest_X_ray").alias("Chest_X_ray"),
+            F.max("Lung_Ultrasound").alias("Lung_Ultrasound"),
+            F.max("ECMO_performed").alias("ECMO_performed"),
+            F.max("ECG_performed").alias("ECG_performed"),
+            F.max("Echocardiogram_performed").alias("Echocardiogram_performed"),
+            F.max("Blood_transfusion").alias("Blood_transfusion"),
+        )
+        .na.fill(0)
+    )
+    return df1

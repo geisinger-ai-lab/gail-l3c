@@ -8,9 +8,9 @@ Implement the sql steps as functions that take in dataframes
 
 """
 
+from global_utils import rename_cols
 from pyspark.sql import functions as F
 
-from global_utils import rename_cols
 
 def get_meds_concepts(concept_set_members):
     """
@@ -143,6 +143,7 @@ where mc.feature_name is not null
 """
     pass
 
+
 def group_meds(meds_filtered):
     sql = """select 
     m.person_id
@@ -157,33 +158,46 @@ group by
     m.person_id
     , m.before_or_after_index
     , m.feature_name"""
-    pass 
+    pass
+
 
 def meds_dataset(meds_grouped):
     """
     Meds grouped needs to be a PySpark function
-    also need to have imported rename_cols from global somewhere 
+    also need to have imported rename_cols from global somewhere
     """
     # Split by templorality
-    meds_before = meds_grouped.filter(meds_grouped.before_or_after_index == "before") 
+    meds_before = meds_grouped.filter(meds_grouped.before_or_after_index == "before")
     meds_during = meds_grouped.filter(meds_grouped.before_or_after_index == "during")
-    meds_after  = meds_grouped.filter(meds_grouped.before_or_after_index == "after")
+    meds_after = meds_grouped.filter(meds_grouped.before_or_after_index == "after")
 
     # Count up the number of each medication feature
-    meds_counts_before = meds_before.groupBy(["person_id", "before_or_after_index"]).pivot("feature_name").agg(F.first("med_count"))
-    meds_counts_during = meds_during.groupBy(["person_id", "before_or_after_index"]).pivot("feature_name").agg(F.first("med_count"))
-    meds_counts_after  = meds_after.groupBy(["person_id", "before_or_after_index"]).pivot("feature_name").agg(F.first("med_count"))
+    meds_counts_before = (
+        meds_before.groupBy(["person_id", "before_or_after_index"])
+        .pivot("feature_name")
+        .agg(F.first("med_count"))
+    )
+    meds_counts_during = (
+        meds_during.groupBy(["person_id", "before_or_after_index"])
+        .pivot("feature_name")
+        .agg(F.first("med_count"))
+    )
+    meds_counts_after = (
+        meds_after.groupBy(["person_id", "before_or_after_index"])
+        .pivot("feature_name")
+        .agg(F.first("med_count"))
+    )
 
     # Change column names to add prefix using global function rename_cols()
     meds_counts_before = rename_cols(meds_counts_before, suffix="_before")
     meds_counts_during = rename_cols(meds_counts_during, suffix="_during")
-    meds_counts_after  = rename_cols(meds_counts_after,  suffix="_after")
+    meds_counts_after = rename_cols(meds_counts_after, suffix="_after")
 
     # Outer join the 3 together on person_id
-    meds_df = meds_counts_before\
-                .join(meds_counts_during, on=("person_id"), how="outer")\
-                .join(meds_counts_after,  on=("person_id"), how="outer")
-    
+    meds_df = meds_counts_before.join(
+        meds_counts_during, on=("person_id"), how="outer"
+    ).join(meds_counts_after, on=("person_id"), how="outer")
+
     # NA is interpreted as no instance of that med
     meds_df = meds_df.fillna(0)
 
@@ -196,7 +210,7 @@ def get_meds_dataset(concept_set_members, drug_exposure, index_range):
 
     Returns formatted meds features
     """
-    
+
     meds_concepts = get_meds_concepts(concept_set_members)
     meds_filtered = filter_meds(index_range, meds_concepts, drug_exposure)
     meds_grouped = group_meds(meds_filtered)

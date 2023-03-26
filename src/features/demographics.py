@@ -1,7 +1,6 @@
-
 def get_person(person_path):
     """
-    columns: 
+    columns:
     person_id,
     year_of_birth,
     month_of_birth,
@@ -32,30 +31,62 @@ def get_person(person_path):
     pass
 
 
-def person_demographics( person ):
+def person_demographics(person):
     df1 = person
 
     from pyspark.ml.feature import StringIndexer
-    df = df1.select("person_id", "gender_concept_name", "race_concept_name", "ethnicity_concept_name", "year_of_birth", "isTrainSet")
-    
-    df_gender = df.groupBy("person_id", "year_of_birth").pivot("gender_concept_name").count() \
-        .select("person_id","year_of_birth", "FEMALE", "MALE")
 
-    df_race = df.groupBy("person_id", "year_of_birth").pivot("race_concept_name").count() \
-        .select("person_id", "year_of_birth", "Asian", "Asian Indian", "Black or African American", "Native Hawaiian or Other Pacific Islander", "White")
+    df = df1.select(
+        "person_id",
+        "gender_concept_name",
+        "race_concept_name",
+        "ethnicity_concept_name",
+        "year_of_birth",
+        "isTrainSet",
+    )
 
-    df_ethnicity = df.groupBy("person_id", "year_of_birth").pivot("ethnicity_concept_name").count() \
-        .select("person_id", "year_of_birth", "Hispanic or Latino", "Not Hispanic or Latino")
+    df_gender = (
+        df.groupBy("person_id", "year_of_birth")
+        .pivot("gender_concept_name")
+        .count()
+        .select("person_id", "year_of_birth", "FEMALE", "MALE")
+    )
 
-    df = df1["person_id", "year_of_birth", "isTrainSet"].join(df_race, on=["person_id", "year_of_birth"], how='left') \
-                                                        .join(df_ethnicity, on=["person_id", "year_of_birth"], how='left') \
-                                                        .join(df_gender, on=["person_id", "year_of_birth"], how='left') \
-                                                        .withColumn("age", F.lit(2022) - F.col("year_of_birth")) \
-                                                        .drop("year_of_birth") \
-                                                        .fillna(0)
+    df_race = (
+        df.groupBy("person_id", "year_of_birth")
+        .pivot("race_concept_name")
+        .count()
+        .select(
+            "person_id",
+            "year_of_birth",
+            "Asian",
+            "Asian Indian",
+            "Black or African American",
+            "Native Hawaiian or Other Pacific Islander",
+            "White",
+        )
+    )
+
+    df_ethnicity = (
+        df.groupBy("person_id", "year_of_birth")
+        .pivot("ethnicity_concept_name")
+        .count()
+        .select(
+            "person_id", "year_of_birth", "Hispanic or Latino", "Not Hispanic or Latino"
+        )
+    )
+
+    df = (
+        df1["person_id", "year_of_birth", "isTrainSet"]
+        .join(df_race, on=["person_id", "year_of_birth"], how="left")
+        .join(df_ethnicity, on=["person_id", "year_of_birth"], how="left")
+        .join(df_gender, on=["person_id", "year_of_birth"], how="left")
+        .withColumn("age", F.lit(2022) - F.col("year_of_birth"))
+        .drop("year_of_birth")
+        .fillna(0)
+    )
 
     for col in df.columns:
         df = df.withColumnRenamed(col, col.replace(" ", "_"))
-    
-    return df
 
+    return df

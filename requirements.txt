@@ -1,6 +1,16 @@
+# local package
+-e .
+
 pandas
 numpy
 pyspark
+pyarrow
 matplotlib
 xgboost
 pandasql
+flake8
+isort
+black 
+pytest
+jupyter
+pyyaml
