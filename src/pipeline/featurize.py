@@ -5,7 +5,6 @@ import pandas as pd
 import yaml
 
 from src.common import get_logger
-
 from src.features.utilization import get_utilization
 
 

@@ -6,9 +6,9 @@ import logging
 import os
 import sys
 from typing import Text, Union
-from pyspark.sql import SparkSession
 
 import pandas as pd
+from pyspark.sql import SparkSession
 
 
 def get_concept_set_members(csm_path):
@@ -152,9 +152,7 @@ def get_logger(
 
     return logger
 
+
 def get_spark_session():
-    spark = (
-        SparkSession.builder.appName("L3C")
-        .getOrCreate()
-    )
+    spark = SparkSession.builder.appName("L3C").getOrCreate()
     return spark

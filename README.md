@@ -48,6 +48,11 @@ Now you can install requirements via pip, as well as the local source.
 make requirements
 ```
 
+After making changes, you can format the code before committing.
+```sh
+make format
+```
+
 The project is structured with high level pipeline steps in `src/pipeline`. All configuration for the project can be placed in `params.yaml` at the project root. All pipeline steps, e.g. featurize, take the config filepath as an argument. The pipeline steps can be run as follows:
 
 Featurize:

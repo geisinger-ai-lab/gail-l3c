@@ -1,30 +1,35 @@
-from src.common import get_spark_session
 import pandas as pd
 from pyspark.sql import types as T
 
+from src.common import get_spark_session
+
+
 def get_utilization():
     spark = get_spark_session()
-    
-    schema = T.StructType([
-        T.StructField('person_id', T.StringType()),
-        T.StructField('is_index_ed', T.IntegerType()),
-        T.StructField('is_index_ip', T.IntegerType()),
-        T.StructField('is_index_tele', T.IntegerType()),
-        T.StructField('is_index_op', T.IntegerType()),
-        T.StructField('avg_los', T.DoubleType()),
-        T.StructField('avg_icu_los', T.DoubleType()),
-        T.StructField('before_ed_cnt', T.LongType()),
-        T.StructField('before_ip_cnt', T.LongType()),
-        T.StructField('before_op_cnt', T.LongType()),
-        T.StructField('during_ed_cnt', T.LongType()),
-        T.StructField('during_ip_cnt', T.LongType()),
-        T.StructField('during_op_cnt', T.LongType()),
-        T.StructField('after_ed_cnt', T.LongType()),
-        T.StructField('after_ip_cnt', T.LongType()),
-        T.StructField('after_op_cnt', T.LongType())
-    ])
-    data =[ ['1'] + [1]*4 + [1.0]*2 + [1]*9 ]
+
+    schema = T.StructType(
+        [
+            T.StructField("person_id", T.StringType()),
+            T.StructField("is_index_ed", T.IntegerType()),
+            T.StructField("is_index_ip", T.IntegerType()),
+            T.StructField("is_index_tele", T.IntegerType()),
+            T.StructField("is_index_op", T.IntegerType()),
+            T.StructField("avg_los", T.DoubleType()),
+            T.StructField("avg_icu_los", T.DoubleType()),
+            T.StructField("before_ed_cnt", T.LongType()),
+            T.StructField("before_ip_cnt", T.LongType()),
+            T.StructField("before_op_cnt", T.LongType()),
+            T.StructField("during_ed_cnt", T.LongType()),
+            T.StructField("during_ip_cnt", T.LongType()),
+            T.StructField("during_op_cnt", T.LongType()),
+            T.StructField("after_ed_cnt", T.LongType()),
+            T.StructField("after_ip_cnt", T.LongType()),
+            T.StructField("after_op_cnt", T.LongType()),
+        ]
+    )
+    data = [["1"] + [1] * 4 + [1.0] * 2 + [1] * 9]
     return spark.createDataFrame(data, schema=schema)
+
 
 # Add_ICU (d5691458-1e67-4887-a68f-4cfbd4753295): v1
 
