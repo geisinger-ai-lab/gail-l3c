@@ -1,4 +1,42 @@
-def get_person(person_path):
+import pandas as pd
+from pyspark.sql import types as T
+
+from src.common import get_spark_session
+
+def get_person():
+    spark = get_spark_session()
+    schema = T.StructType(
+        [
+            T.StructField("person_id", T.StringType()),
+            T.StructField("year_of_birth", T.IntegerType()),
+            T.StructField("month_of_birth", T.IntegerType()),
+            T.StructField("day_of_birth", T.IntegerType()),
+            T.StructField("birth_datetime", T.IntegerType()),
+            T.StructField("location_id", T.StringType()),
+            T.StructField("provider_id", T.StringType()),
+            T.StructField("care_site_id", T.StringType()),
+            T.StructField("person_source_value", T.StringType()),
+            T.StructField("data_partner_id", T.IntegerType()),
+            T.StructField("gender_source_value", T.StringType()),
+            T.StructField("race_source_value", T.StringType()),
+            T.StructField("ethnicity_source_value", T.StringType()),
+            T.StructField("gender_concept_id", T.StringType()),
+            T.StructField("race_concept_id", T.StringType()),
+            T.StructField("ethnicity_concept_id", T.IntegerType()),
+            T.StructField("gender_source_concept_id", T.IntegerType()),
+            T.StructField("race_source_concept_id", T.IntegerType()),
+            T.StructField("ethnicity_source_concept_id", T.IntegerType()),
+            T.StructField("gender_concept_name", T.IntegerType()),
+            T.StructField("race_concept_name", T.IntegerType()),
+            T.StructField("ethnicity_concept_name", T.StringType()),
+            T.StructField("gender_source_concept_name", T.StringType()),
+            T.StructField("race_source_concept_name", T.StringType()),
+            T.StructField("ethnicity_source_concept_name", T.StringType()),
+            T.StructField("is_age_90_or_older", T.BooleanType()),
+        ]
+    )
+    return spark.createDataFrame(data, schema=schema)
+    
     """
     columns:
     person_id,
@@ -28,8 +66,6 @@ def get_person(person_path):
     ethnicity_source_concept_name,
     is_age_90_or_older
     """
-    pass
-
 
 def person_demographics(person):
     df1 = person
