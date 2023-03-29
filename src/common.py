@@ -9,13 +9,7 @@ from typing import Text, Union
 
 import pandas as pd
 from pyspark.sql import SparkSession
-
-
-def get_concept_set_members(csm_path):
-    """
-    Returns a pandas dataframe with the concept_set_members table at the given path
-    """
-    pass
+from pyspark.sql.functions import col
 
 
 def get_index_range(index_range_path):

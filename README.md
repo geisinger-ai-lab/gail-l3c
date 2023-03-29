@@ -5,9 +5,9 @@
 | Feature type   | OMOP table  | owner |
 | -------------- | ----------- | ----- |
 | Demographics   | person      | Gaurav
-| Lab results    | measurement | Tamanna
+| Lab results    | measurement | Gaurav/Tamanna
 | Vitals         | measurement | Elliot
-| Diagnoses      | contition   | Biplab
+| Diagnoses      | contition   | Gaurav/Biplab
 | Procedures     | procedure   | Tamanna
 | Utilization    | visit       | Grant
 | Medications    | drug        | Elliot
