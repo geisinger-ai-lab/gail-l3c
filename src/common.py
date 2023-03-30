@@ -11,6 +11,43 @@ import pandas as pd
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import col
 
+## Vitals Features:
+feat_vitals = [
+    "bp_diastolic_before",
+    "bp_systolic_before",
+    "heart_rate_before",
+    "resp_rate_before",
+    "spo2_before",
+    "bp_diastolic_during",
+    "bp_systolic_during",
+    "heart_rate_during",
+    "resp_rate_during",
+    "spo2_during",
+    "bp_diastolic_after",
+    "bp_systolic_after",
+    "heart_rate_after",
+    "resp_rate_after",
+    "spo2_after",
+]
+
+## Smoking Features:
+feat_smoke = ["smoker"]
+
+## Medication Count Features:
+feat_meds = [
+    "anticoagulants_before",
+    "asthma_drugs_before",
+    "antibiotics_during",
+    "antivirals_during",
+    "corticosteroids_during",
+    "iv_immunoglobulin_during",
+    "lopinavir_during",
+    "paxlovid_during",
+    "remdesivir_during",
+    "anticoagulants_after",
+    "asthma_drugs_after",
+]
+
 
 def get_index_range(index_range_path):
     """

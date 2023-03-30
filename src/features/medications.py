@@ -8,8 +8,6 @@ Implement the sql steps as functions that take in dataframes
 
 """
 
-import numpy as np
-import pandas as pd
 from pyspark.sql import functions as F
 
 from src.common import get_spark_session, rename_cols
@@ -207,18 +205,14 @@ if __name__ == "__main__":
     spark = get_spark_session()
 
     # Load data as spark DF
-    concept_set_path = "data/raw_sample/concept_set_members.csv"
-    concept_set_members = spark.read.csv(concept_set_path, header=True)
+    concept_set_members_path = "data/raw_sample/concept_set_members.csv"
+    concept_set_members = spark.read.csv(concept_set_members_path, header=True)
 
-    drug_exposure = spark.read.csv(
-        "data/raw_sample/training/drug_exposure.csv", header=True
-    )
-    drug_exposure = drug_exposure.withColumn(
-        "drug_concept_id", drug_exposure.drug_concept_id.cast("int")
-    ).withColumn("person_id", drug_exposure.person_id.cast("int"))
-    index_range = spark.read.csv(
-        "data/intermediate/training/index_range.csv", header=True
-    )
+    drug_exposure_path = "data/raw_sample/training/drug_exposure.csv"
+    drug_exposure = spark.read.csv(drug_exposure_path, header=True, inferSchema=True)
+
+    index_range_path = "data/intermediate/training/index_range.csv"
+    index_range = spark.read.csv(index_range_path, header=True, inferSchema=True)
 
     # Run the meds data ETL
     meds_df = get_meds_dataset(concept_set_members, drug_exposure, index_range)
