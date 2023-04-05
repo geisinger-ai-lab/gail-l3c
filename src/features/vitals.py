@@ -8,11 +8,17 @@ Implement the sql steps as functions that take in dataframes
 
 """
 
-from global_utils import rename_cols
 from pyspark.sql import functions as F
+
+from src.common import get_spark_session, rename_cols
+
+spark = get_spark_session()
 
 
 def get_vitals_concepts(concept_set_members):
+
+    concept_set_members.createOrReplaceTempView("concept_set_members")
+
     sql = """select *, 'spo2' as feature_name, 'percent' as preferred_unit_concept_name
 from concept_set_members csm
 where csm.codeset_id = 298033057 -- [Feasibility] Oxygen saturation
@@ -34,68 +40,32 @@ from concept_set_members csm
 where csm.codeset_id = 510707388 -- Respiratory rate (LG33055-1 and SNOMED)
 ;
 """
-    pass
-
-
-def get_measurement(meas_path):
-    """
-    columns:
-    person_id,
-    measurement_id,
-    measurement_date,
-    measurement_datetime,
-    measurement_time,
-    value_as_number,
-    range_low,
-    range_high,
-    provider_id,
-    visit_occurrence_id,
-    visit_detail_id,
-    unit_source_value,
-    data_partner_id,
-    value_source_value,
-    measurement_source_value,
-    measurement_concept_id,
-    measurement_type_concept_id,
-    operator_concept_id,
-    value_as_concept_id,
-    unit_concept_id,
-    measurement_source_concept_id,
-    measurement_concept_name,
-    measurement_type_concept_name,
-    operator_concept_name,
-    value_as_concept_name,
-    unit_concept_name,
-    measurement_source_concept_name,
-    unit_concept_id_or_inferred_unit_concept_id,
-    harmonized_unit_concept_id,
-    harmonized_value_as_number
-    """
-    pass
+    return spark.sql(sql)
 
 
 def filter_vitals(vitals_concepts, index_range, measurement):
+
+    vitals_concepts.createOrReplaceTempView("vitals_concepts")
+    index_range.createOrReplaceTempView("index_range")
+    measurement.createOrReplaceTempView("measurement")
+
     sql = """select 
     m.person_id
     , m.measurement_date
     , m.measurement_concept_id
-    , m.measurement_concept_name
     , m.value_as_number
     , m.value_as_concept_id
-    , m.value_as_concept_name
     , m.unit_concept_id
-    , m.unit_concept_name
+    -- , m.unit_concept_name
     , m.measurement_source_concept_id
-    , m.measurement_source_concept_name
     , m.range_low
     , m.range_high
-    , m.data_partner_id
     , case when (m.measurement_date >= ci.index_start_date) and (m.measurement_date <= ci.index_end_date) then 'during'
         when m.measurement_date < ci.index_start_date then 'before'
         when m.measurement_date > ci.index_end_date then 'after'
     end as before_or_after_index
     , cs.feature_name
-from        measurement_merge                   as m
+from        measurement                         as m
 left join   index_range                         as ci on ci.person_id = m.person_id
 left join   vitals_concepts                     as cs on m.measurement_concept_id = cs.concept_id
 where 
@@ -107,19 +77,18 @@ where
     and m.value_as_number < 900 
     
     -- Match preferred united when specified
-    and (cs.preferred_unit_concept_name is null or cs.preferred_unit_concept_name = m.unit_concept_name) 
+    -- and (cs.preferred_unit_concept_name is null or cs.preferred_unit_concept_name = m.unit_concept_name) 
 ;
 """
-    pass
+    # TODO: Fix preferred unit concept matching (use ID instead)
+    return spark.sql(sql)
 
 
 def group_vitals(vitals_filtered):
-    sql = """
-@transform_pandas(
-    Output(rid="ri.foundry.main.dataset.b22f0cc5-51b8-4e5d-a46a-c4dff3a0f5f8"),
-    vitals_filtered=Input(rid="ri.foundry.main.dataset.b199d167-0207-445f-8b2e-8b19fefad768")
-)
-select 
+
+    vitals_filtered.createOrReplaceTempView("vitals_filtered")
+
+    sql = """select 
     v.person_id
     , v.feature_name
     , v.before_or_after_index
@@ -128,9 +97,9 @@ select
     , count(v.value_as_number) as vital_count
 from vitals_filtered v
 group by v.person_id, v.feature_name, v.before_or_after_index
-
 """
-    pass
+
+    return spark.sql(sql)
 
 
 def vitals_dataset(vitals_grouped):
@@ -165,7 +134,7 @@ def vitals_dataset(vitals_grouped):
     return vitals_df
 
 
-def get_vitals_dataset(concept_set_members, drug_exposure, index_range):
+def get_vitals_dataset(concept_set_members, measurement, index_range):
     """
     The "Public" function, meant to be called from the main data preparation script
 
@@ -173,8 +142,48 @@ def get_vitals_dataset(concept_set_members, drug_exposure, index_range):
     """
 
     vitals_concepts = get_vitals_concepts(concept_set_members)
-    vitals_filtered = filter_vitals(index_range, vitals_concepts, drug_exposure)
+    vitals_filtered = filter_vitals(vitals_concepts, index_range, measurement)
     vitals_grouped = group_vitals(vitals_filtered)
     vitals_df = vitals_dataset(vitals_grouped)
 
     return vitals_df
+
+
+if __name__ == "__main__":
+
+    # Load data as spark DF
+    concept_set_path = "data/raw_sample/concept_set_members.csv"
+    concept_set_members = spark.read.csv(
+        concept_set_path, header=True, inferSchema=True
+    )
+    # concept_set_members = concept_set_members.withColumn("concept_id", concept_set_members.concept_id.cast("int"))
+
+    index_range_path = "data/intermediate/training/index_range.csv"
+    index_range = spark.read.csv(index_range_path, header=True, inferSchema=True)
+
+    measurement_path = "data/raw_sample/training/measurement.csv"
+    measurement = spark.read.csv(measurement_path, header=True, inferSchema=True)
+
+    # measurement = measurement.withColumn(
+    #     "measurement_concept_id", measurement.measurement_concept_id.cast("int")
+    # ).withColumn("person_id", measurement.person_id.cast("int"))
+    # measurement.show()
+
+    # observation = spark.read.csv("data/raw_sample/training/observation.csv", header=True)
+
+    # vitals_concepts = get_vitals_concepts(concept_set_members)
+    # vitals_concepts.show()
+
+    # vitals_filtered = filter_vitals(vitals_concepts, index_range, measurement)
+    # vitals_filtered.show()
+    # import pdb; pdb.set_trace()
+
+    # vitals_grouped = group_vitals(vitals_filtered)
+    # vitals_grouped.show()
+
+    # vitals_df = vitals_dataset(vitals_grouped)
+
+    # Run the vitals data ETL
+    vitals_df = get_vitals_dataset(concept_set_members, measurement, index_range)
+
+    vitals_df.show()
