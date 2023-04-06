@@ -27,7 +27,8 @@ def get_utilization():
             T.StructField("after_op_cnt", T.LongType()),
         ]
     )
-    data = [["1"] + [1] * 4 + [1.0] * 2 + [1] * 9]
+    # data = [["1"] + [1] * 4 + [1.0] * 2 + [1] * 9]
+    data = []
     return spark.createDataFrame(data, schema=schema)
 
 
@@ -43,19 +44,13 @@ def add_icu(
 ):
     icu_codeset_id = 469361388
 
-    icu_concepts = concept_set_members.filter(
-        F.col("codeset_id") == icu_codeset_id
-    ).select("concept_id", "concept_name")
+    icu_concepts = concept_set_members.filter(F.col("codeset_id") == icu_codeset_id).select(
+        "concept_id", "concept_name"
+    )
 
-    procedures_df = procedure_occurrence_merge[
-        ["visit_occurrence_id", "procedure_concept_id"]
-    ]
-    condition_df = condition_occurrence_merge[
-        ["visit_occurrence_id", "condition_concept_id"]
-    ]
-    observation_df = observation_merge[
-        ["visit_occurrence_id", "observation_concept_id"]
-    ]
+    procedures_df = procedure_occurrence_merge[["visit_occurrence_id", "procedure_concept_id"]]
+    condition_df = condition_occurrence_merge[["visit_occurrence_id", "condition_concept_id"]]
+    observation_df = observation_merge[["visit_occurrence_id", "observation_concept_id"]]
 
     df = microvisits_to_macrovisits_merge
 
@@ -111,9 +106,7 @@ def coerce_los_outliers(add_los_and_index):
     if COERCE_LOS_OUTLIERS:
         df = df.withColumn(
             "los_mod",
-            F.when(F.col("los") > LOS_MAX, 0)
-            .when(F.col("los") < 0, 0)
-            .otherwise(F.col("los")),
+            F.when(F.col("los") > LOS_MAX, 0).when(F.col("los") < 0, 0).otherwise(F.col("los")),
         )
         df = df.drop("los").withColumnRenamed("los_mod", "los")
 
@@ -136,8 +129,7 @@ def before_index_visit_name_counts_copied(add_ed_ip_op_copied, index_range):
     add_ed_ip_op = add_ed_ip_op_copied
     df = add_ed_ip_op.join(idx_df, "person_id", how="left")
     before_df = df.where(
-        F.coalesce(F.col("visit_end_date"), F.col("visit_start_date"))
-        < F.col("index_start_date")
+        F.coalesce(F.col("visit_end_date"), F.col("visit_start_date")) < F.col("index_start_date")
     )
 
     counts_df = before_df.groupBy("person_id").agg(

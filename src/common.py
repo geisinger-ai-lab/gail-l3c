@@ -9,7 +9,86 @@ from typing import Text, Union
 
 import pandas as pd
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import col
+from pyspark.sql.functions import col, lit
+
+## Demographics Features:
+feat_demo = [
+    "age",
+    "FEMALE",
+    "MALE",
+    "Asian",
+    "Asian_Indian",
+    "Black_or_African_American",
+    "Native_Hawaiian_or_Other_Pacific_Islander",
+    "White",
+]
+
+## Measurement Features:
+feat_meas = [
+    "body_height_value",
+    "body_weight_value",
+    "alanine_aminotransferase_value",
+    "albumin_value",
+    "albumin_bcg_value",
+    "albumin_bcp_value",
+    "albumin_electrophoresis_value",
+    "albumin_globulin_ratio_value",
+    "alkaline_phosphatase_value",
+    "anion_gap_value",
+    "aspartate_aminotransferase_value",
+    "bicarbonate_value",
+    "bilirubin_total_value",
+    "bun_value",
+    "bun_creatinine_ratio_value",
+    "calcium_value",
+    "carbon_dioxide_total_value",
+    "chloride_value",
+    "creatinine_value",
+    "globulin_value",
+    "glomerular_filt_CKD_value",
+    "glomerular_filt_blacks_CKD_value",
+    "glomerular_filt_blacks_MDRD_value",
+    "glomerular_filt_females_MDRD_value",
+    "glomerular_filt_nonblacks_CKD_value",
+    "glomerular_filt_nonblacks_MDRD_value",
+    "glucose_value",
+    "potassium_value",
+    "protein_value",
+    "sodium_value",
+    "absolute_band_neutrophils_value",
+    "absolute_basophils_value",
+    "absolute_eosinophils_value",
+    "absolute_lymph_value",
+    "absolute_monocytes_value",
+    "absolute_neutrophils_value",
+    "absolute_other_value",
+    "absolute_var_lymph_value",
+    "cbc_panel_value",
+    "hct_value",
+    "hgb_value",
+    "mch_value",
+    "mchc_value",
+    "mcv_value",
+    "mpv_value",
+    "pdw_volume_value",
+    "percent_band_neutrophils_value",
+    "percent_basophils_value",
+    "percent_eosinophils_value",
+    "percent_granulocytes_value",
+    "percent_lymph_value",
+    "percent_monocytes_value",
+    "percent_neutrophils_value",
+    "percent_other_value",
+    "percent_var_lymph_value",
+    "platelet_count_value",
+    "rbc_count_value",
+    "rdw_ratio_value",
+    "rdw_volume_value",
+    "wbc_count_value",
+]
+feat_meas_after = ["after_" + feat for feat in feat_meas]
+feat_meas_before = ["before_" + feat for feat in feat_meas]
+feat_meas_during = ["during_" + feat for feat in feat_meas]
 
 ## Vitals Features:
 feat_vitals = [
@@ -33,6 +112,17 @@ feat_vitals = [
 ## Smoking Features:
 feat_smoke = ["smoker"]
 
+## Diagnosis Count Features:
+feat_dxct = [
+    "asthma",
+    "copd",
+    "diabetes_complicated",
+    "diabetes_uncomplicated",
+    "heart_failure",
+    "hypertension",
+    "obesity",
+]
+
 ## Medication Count Features:
 feat_meds = [
     "anticoagulants_before",
@@ -47,6 +137,85 @@ feat_meds = [
     "anticoagulants_after",
     "asthma_drugs_after",
 ]
+
+## Procedure Count Features:
+feat_proc = [
+    "after_Ventilator_used",
+    "after_Lungs_CT_scan",
+    "after_Chest_X_ray",
+    "after_Lung_Ultrasound",
+    "after_ECMO_performed",
+    "after_ECG_performed",
+    "after_Echocardiogram_performed",
+    "after_Blood_transfusion",
+    "before_Ventilator_used",
+    "before_Lungs_CT_scan",
+    "before_Chest_X_ray",
+    "before_Lung_Ultrasound",
+    "before_ECMO_performed",
+    "before_ECG_performed",
+    "before_Echocardiogram_performed",
+    "before_Blood_transfusion",
+    "during_Ventilator_used",
+    "during_Lungs_CT_scan",
+    "during_Chest_X_ray",
+    "during_Lung_Ultrasound",
+    "during_ECMO_performed",
+    "during_ECG_performed",
+    "during_Echocardiogram_performed",
+    "during_Blood_transfusion",
+]
+
+## Utilization features:
+feat_utl = [
+    "is_index_ed",
+    "is_index_ip",
+    "is_index_tele",
+    "is_index_op",
+    "avg_los",
+    "avg_icu_los",
+    "before_ed_cnt",
+    "before_ip_cnt",
+    "before_op_cnt",
+    "during_ed_cnt",
+    "during_ip_cnt",
+    "during_op_cnt",
+    "after_ed_cnt",
+    "after_ip_cnt",
+    "after_op_cnt",
+]
+
+
+## Variable initialization for modeling:
+random_seed = 16
+
+## Deciding what features to run and for what label:
+features = (
+    feat_demo
+    + feat_vitals
+    + feat_meas_before
+    + feat_meas_during
+    + feat_meas_after
+    + feat_smoke
+    + feat_dxct
+    + feat_meds
+    + feat_utl
+    + feat_proc
+)
+
+label = "pasc_code_after_four_weeks"
+
+
+def add_missing_cols(df, col_list, fill_val=0):
+    missing_cols = [c for c in col_list if c not in df.columns]
+
+    select_statement = []
+    for col in missing_cols:
+        select_statement.append(lit(fill_val).alias(col))
+
+    df = df.select(*df.columns, *select_statement)
+
+    return df
 
 
 def get_index_range(index_range_path):
