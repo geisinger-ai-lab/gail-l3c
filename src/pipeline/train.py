@@ -85,23 +85,9 @@ def train(config_path: Text) -> None:
     # Train the model
     clf = train_xgb_model(vectorizer, featurized_df, config)
 
+    # Save the model locally
     model_path = os.path.join(config["train"]["model_path"], config["train"]["model_name"])
     clf.save_model(model_path)
-
-
-"""
-create the vectorizor
-call xgb_train_test_model(vectorizer, get_training_dataset)
-
-Save the model
-
-Then, in Infer...
-
-Load the model; load the data (could specify multiple files?)
-run predictions
-print/save nice plots or something
-
-"""
 
 
 if __name__ == "__main__":

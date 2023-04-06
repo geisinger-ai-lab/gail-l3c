@@ -11,10 +11,11 @@ featurize:
 train:
   model_path: 'models/'
   model_name: 'demo.json'
+  random_seed: 16
 infer:
   data_path: 'data/featurized/training'
   data_files:
     - 'featurized_data_train.csv'
     - 'featurized_data_test.csv'
   predictions_path: 'data/predictions/training'
-  random_seed: 16
+  threshold: 0.5

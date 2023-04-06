@@ -7,9 +7,16 @@ import os
 import sys
 from typing import Text, Union
 
+import matplotlib.pyplot as plt 
+import numpy as np 
 import pandas as pd
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import col, lit
+
+from sklearn.metrics import (confusion_matrix, classification_report, ConfusionMatrixDisplay, 
+    f1_score, precision_score, recall_score, average_precision_score, precision_recall_curve,  
+    roc_auc_score, roc_curve, brier_score_loss)
+from sklearn.calibration import calibration_curve
 
 ## Demographics Features:
 feat_demo = [
@@ -356,3 +363,102 @@ def get_logger(
 def get_spark_session():
     spark = SparkSession.builder.appName("L3C").getOrCreate()
     return spark
+
+
+def calculate_evaluation_metrics(model, df, threshold=0.5):
+    """
+    Function to calulate eval metrics and plots for a given model and data set
+
+    model - an "object" input of the model you want to evaluate
+    data - the data set to evaluate against. IMPORTANT: For the code to work the `data` needs to be loaded into the transform as a "Transform input" not a spark dataframe
+    """
+
+    ## Generate predictions for the input data:
+    scores = pd.DataFrame()
+    scores['predict_prob'] = model.predict_proba( df[features] )[:,1]
+    scores['pred_label'] = (scores.predict_prob > threshold).astype('int')
+    scores['true_label'] = df[label]
+
+    ## Generating confusion matrix and all other values:
+    cm = confusion_matrix( scores['true_label'], scores['pred_label'] )
+    FP = cm.sum(axis=0) - np.diag(cm)  
+    FN = cm.sum(axis=1) - np.diag(cm)
+    TP = np.diag(cm)
+    TN = cm.sum() - (FP + FN + TP) 
+
+    ## Generating confusion matrix image:
+    disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=['No PASC', 'PASC'])
+    disp.plot()
+    cm_plot = plt.gcf()
+
+    ## Generating precision, recall, f-measure scores:
+    f1 = f1_score( scores['true_label'], scores['pred_label'], average='binary')
+    precision = precision_score( scores['true_label'], scores['pred_label'], average='binary')
+    recall = recall_score( scores['true_label'], scores['pred_label'], average='binary')
+
+    ## Precision-Recall Curve
+    p, r, thresholds = precision_recall_curve(scores['true_label'], scores['predict_prob'])
+    plt.figure()
+    plt.plot(r, p)
+    plt.xlabel("Recall")
+    plt.ylabel("Precision")
+    plt.title("Precision-Recall Curve")
+    pr_curve = plt.gcf()
+
+    ## ROC Curve
+    fpr, tpr, thresholds = roc_curve(scores['true_label'], scores['predict_prob'])
+    plt.figure()
+    plt.plot(fpr, tpr)
+    plt.plot([0, 1], [0, 1], color='gray', linestyle='--')
+    plt.xlabel("False Positive Rate")
+    plt.ylabel("True Positive Rate")
+    plt.title("ROC Curve")
+    roc = plt.gcf()
+
+    ## Calibration plot
+    prob_true, prob_pred = calibration_curve(scores['true_label'], scores['predict_prob'], n_bins=10)
+    plt.figure()
+    plt.plot(prob_pred, prob_true, 's-')
+    plt.plot([0, 1], [0, 1], color='gray', linestyle='--')
+    plt.xlabel("Predicted Probability")
+    plt.ylabel("Fraction of Positives")
+    plt.title("Calibration Curve")
+    calibration_plot = plt.gcf()
+
+    ## Calibration Breir Score
+    brier = brier_score_loss(scores['true_label'], scores['predict_prob'])
+
+    ## Score dist
+    plt.figure()
+    plt.hist(scores['predict_prob'], range=(0, 1), bins=10, histtype="step")
+    plt.xlabel("Predicted Probability")
+    plt.ylabel("Count")
+    plt.title("Histogram of predicted probabilities")
+    pred_dist = plt.gcf()
+
+    ## Average precision
+    average_precision = average_precision_score(scores['true_label'], scores['predict_prob'])
+
+    ## AU-ROC score:
+    auroc = roc_auc_score( scores['true_label'], scores['predict_prob'])
+
+    ## Classification Report:
+    cr = classification_report( scores['true_label'], scores['pred_label'], target_names=['No PASC', 'PASC'] )
+
+    # Initialize MetricSet container
+    metric_set = {}
+
+    metric_set['confusion_matrix'] = cm_plot
+    metric_set[f'f1_score@{threshold}'] = f1
+    metric_set[f'precision@{threshold}'] = precision
+    metric_set[f'recall@{threshold}'] = recall
+    metric_set['area_under_roc'] = auroc
+    metric_set['pr_curve'] = pr_curve
+    metric_set['average_precision'] = average_precision
+    metric_set['roc_curve'] = roc
+    metric_set['calibration_curve'] = calibration_plot
+    metric_set['brier_score'] = brier
+    metric_set['predictions_histogram'] = pred_dist
+
+    ## View the outputs in the Metrics tab below:
+    return metric_set
