@@ -5,11 +5,14 @@ function to load diagnosis data
 """
 import numpy as np
 import pandas as pd
-#from pyspark.sql import types, functions as T,F
-from pyspark.sql.functions import when
 from pyspark.sql import functions as F
+
+# from pyspark.sql import types, functions as T,F
+from pyspark.sql.functions import when
+
 from src.common import get_spark_session, rename_cols
 
+spark = get_spark_session()
 
 """
 @transform_pandas(
@@ -82,8 +85,9 @@ def cohort_diagnosis_curated(condition_occurrence, concept_set_members):
     --  ORDER BY cond.person_id 
 
     """
-    
+
     return spark.sql(cond_sql)
+
 
 # from pyspark.sql.functions import expr
 
@@ -116,6 +120,14 @@ def cohort_dx_ct_features(COHORT_DIAGNOSIS_CURATED):
     return pivotDF
 
 
+def get_diagnoses(condition_occurrence, concept_set_members):
+    cohort_diagnosis = cohort_diagnosis_curated(condition_occurrence, concept_set_members)
+
+    cohort_dx_features = cohort_dx_ct_features(cohort_diagnosis)
+
+    return cohort_dx_features
+
+
 if __name__ == "__main__":
 
     spark = get_spark_session()
@@ -125,14 +137,13 @@ if __name__ == "__main__":
     concept_set_members = spark.read.csv(concept_set_path, header=True)
 
     condition_occurrence = spark.read.csv(
-        "data/raw_sample/training/condition_occurrence.csv", header=True)
+        "data/raw_sample/training/condition_occurrence.csv", header=True
+    )
 
     condition_occurrence = condition_occurrence.withColumn(
         "condition_concept_id", condition_occurrence.condition_concept_id.cast("int")
     ).withColumn("person_id", condition_occurrence.person_id.cast("int"))
-    index_range = spark.read.csv(
-        "data/intermediate/training/index_range.csv", header=True
-    )
+    index_range = spark.read.csv("data/intermediate/training/index_range.csv", header=True)
 
     cohort_diagnosis = cohort_diagnosis_curated(condition_occurrence, concept_set_members)
 
@@ -140,5 +151,4 @@ if __name__ == "__main__":
 
     cohort_dx_features.show()
 
-
-    #demographics.show()
+    # demographics.show()
