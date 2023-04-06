@@ -8,3 +8,13 @@ featurize:
   concept_set_members: 'data/raw_sample/concept_set_members.csv'
   test_set_pct: 0.25
   random_state: 16
+train:
+  model_path: 'models/'
+  model_name: 'demo.json'
+infer:
+  data_path: 'data/featurized/training'
+  data_files:
+    - 'featurized_data_train.csv'
+    - 'featurized_data_test.csv'
+  predictions_path: 'data/predictions/training'
+  random_seed: 16

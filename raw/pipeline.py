@@ -339,65 +339,7 @@ def missing_value_imputation_test(merge_testing_data):
 
     
 
-@transform_pandas(
-    Output(rid="ri.foundry.main.dataset.b48e8d52-52fc-4538-b7dc-0abeed3f19e2"),
-    get_training_dataset=Input(rid="ri.foundry.main.dataset.3c0351f5-f2e3-4939-bd52-c106b7c0752f")
-)
-def vectorizer(get_training_dataset):
 
-    from sklearn.compose import make_column_transformer
-    from sklearn.preprocessing import StandardScaler
-
-    # Import Foundry python model wrapper
-    from foundry_ml import Model, Stage
-
-    training_data = get_training_dataset
-    training_columns = features 
-    
-    # The passthrough option combines the numeric columns into a feature vector
-    column_transformer = make_column_transformer(
-        ('passthrough', training_columns)
-        # (StandardScaler(), list(training_data.columns.values))
-    )
-
-    # Fit the column transformer to act as a vectorizer
-    column_transformer.fit( training_data[training_columns] )
-
-    # Wrap the vectorizer as a Stage to indicate this is the transformation that will be applied in the Model
-    vectorizer = Stage(column_transformer)
-
-    return Model(vectorizer)
-
-@transform_pandas(
-    Output(rid="ri.foundry.main.dataset.6d6663d0-454f-426c-96c3-dea9f75da0e3"),
-    get_training_dataset=Input(rid="ri.foundry.main.dataset.3c0351f5-f2e3-4939-bd52-c106b7c0752f"),
-    vectorizer=Input(rid="ri.foundry.main.dataset.b48e8d52-52fc-4538-b7dc-0abeed3f19e2")
-)
-def xgb_train_test_model(vectorizer, get_training_dataset):
-
-    ## Library Import: 
-    import xgboost as xgb
-
-    ## Initializations:
-    # Import the training dataset in Pandas Format
-    # Vectorizer in the object input type:
-    training_data = get_training_dataset
-
-    # Applies vectorizer to produce a DataFrame with all original columns and the column of vectorized data: 
-    training_df = vectorizer.transform(training_data[features])
-
-    # Invoke a palantir helper function to convert a column of vectors into a NumPy matrix and handle sparsity
-    X = extract_matrix(training_df, 'features')
-    y = training_data[label]
-
-     # Train a XGBoost model 
-    clf =  xgb.XGBClassifier(max_depth = 8, min_child_weight = 1, colsample_bytree= 0.5, learning_rate= 0.1,   reg_alpha = 0.25, reg_lambda= 1.2, scale_pos_weight= 5, random_state= random_seed) 
-    clf.fit(X, y)
-
-    # Return Model object that now contains a pipeline of transformations
-    model = Model(vectorizer, Stage(clf, input_column_name='features'))
-
-    return model
 
 @transform_pandas(
     Output(rid="ri.foundry.main.dataset.ef243559-648d-4247-a286-7bcc2af70e9a"),

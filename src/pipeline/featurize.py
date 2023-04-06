@@ -21,6 +21,7 @@ from src.common import (
     feat_vitals,
     get_logger,
     get_spark_session,
+    label,
 )
 from src.features.demographics import person_demographics
 from src.features.diagnoses import get_diagnoses
@@ -135,13 +136,14 @@ def featurize(config_path: Text) -> None:
     )
     utilization_features = get_utilization()  # TODO <-- placeholder
     vitals_features = get_vitals_dataset(concept_set_members, measurement, index_range)
+    label_df = index_range.select(["person_id", label])
 
     logger.info(f"Utilization columns: {[c for c in utilization_features.columns]}")
 
     # Add empty columns for features that may be missing
     demographics_features = add_missing_cols(df=demographics_features, col_list=feat_demo)
     diagnoses_features = add_missing_cols(df=diagnoses_features, col_list=feat_dxct)
-    # labs_features           = add_missing_cols(df=labs_features,         col_list=feat_demo, , fill_val=-1)
+    # labs_features      = add_missing_cols(df=labs_features, col_list=feat_demo, fill_val=-1)
     medications_features = add_missing_cols(df=medications_features, col_list=feat_meds)
     smoking_features = add_missing_cols(df=smoking_features, col_list=feat_smoke, fill_val=-1)
     procedures_features = add_missing_cols(df=procedures_features, col_list=feat_proc)
@@ -157,6 +159,7 @@ def featurize(config_path: Text) -> None:
         .join(procedures_features, on="person_id", how="left")
         .join(utilization_features, on="person_id", how="left")
         .join(vitals_features, on="person_id", how="left")
+        .join(label_df, on="person_id", how="left")
     )
 
     logger.info(
@@ -169,6 +172,7 @@ def featurize(config_path: Text) -> None:
     logger.info(f"Featurized dataframe schema: {featurized_df.printSchema()}")
 
     ## Train / test split
+    data_path_featurized = config["featurize"]["data_path_featurized"]
     if config["featurize"].get("test_set_pct"):
         test_set_pct = config["featurize"]["test_set_pct"]
         assert test_set_pct < 1
@@ -177,22 +181,19 @@ def featurize(config_path: Text) -> None:
         train_df, test_df = featurized_df.randomSplit(
             [1 - test_set_pct, test_set_pct], seed=random_seed
         )
+        train_df_path = os.path.join(data_path_featurized, "featurized_data_train.csv")
+        logger.info(f"Writing training set to {train_df_path}")
+        train_df.toPandas().to_csv(train_df_path, index=None)
 
-        train_df_path = os.path.join(
-            config["featurize"]["data_path_featurized"], "featurized_data_train.csv"
-        )
-        train_df.write.option("header", "true").mode("overwrite").csv(train_df_path)
+        test_df_path = os.path.join(data_path_featurized, "featurized_data_test.csv")
+        logger.info(f"Writing test set to {train_df_path}")
+        test_df.toPandas().to_csv(test_df_path)
 
-        test_df_path = os.path.join(
-            config["featurize"]["data_path_featurized"], "featurized_data_test.csv"
-        )
-        test_df.write.option("header", "true").mode("overwrite").csv(test_df_path)
     else:
         # If test_set_pct is not specified, just write the full featurized_df
-        featurized_df_path = os.path.join(
-            config["featurize"]["data_path_featurized"], "featurized_data.csv"
-        )
-        featurized_df.write.option("header", "true").mode("overwrite").csv(featurized_df_path)
+        featurized_df_path = os.path.join(data_path_featurized, "featurized_data.csv")
+        logger.info(f"Writing featurized data set to {featurized_df_path}")
+        featurized_df.toPandas().to_csv(featurized_df_path)
 
 
 if __name__ == "__main__":
