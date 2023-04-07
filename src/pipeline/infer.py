@@ -46,11 +46,12 @@ def infer(config_path: Text) -> None:
         prediction_df["predict_prob"] = xgb_model.predict_proba(featurized_df[features])[:, 1]
 
         # Save predictions (person_id, prob, pred_label)
-        predictions_path = os.path.join(
-            config["infer"]["predictions_path"], data_file_name + "predictions.csv"
-        )
+        predictions_path = config["infer"]["predictions_path"]
+        if not os.path.exists(predictions_path):
+            os.mkdir(predictions_path)
+        predictions_csv = os.path.join(predictions_path, data_file_name + "-predictions.csv")
         logger.info(f"Saving predicted probabilities to {predictions_path}...")
-        prediction_df.to_csv(predictions_path, index=False)
+        prediction_df.to_csv(predictions_csv, index=False)
 
         # Print evaluation metrics
         # TODO: make a nicer printed summary and save plots to png

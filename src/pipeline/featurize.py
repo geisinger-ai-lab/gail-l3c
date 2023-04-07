@@ -173,6 +173,8 @@ def featurize(config_path: Text) -> None:
 
     ## Train / test split
     data_path_featurized = config["featurize"]["data_path_featurized"]
+    if not os.path.exists(data_path_featurized):
+        os.mkdir(data_path_featurized)
     if config["featurize"].get("test_set_pct"):
         test_set_pct = config["featurize"]["test_set_pct"]
         assert test_set_pct < 1
@@ -187,13 +189,13 @@ def featurize(config_path: Text) -> None:
 
         test_df_path = os.path.join(data_path_featurized, "featurized_data_test.csv")
         logger.info(f"Writing test set to {train_df_path}")
-        test_df.toPandas().to_csv(test_df_path)
+        test_df.toPandas().to_csv(test_df_path, index=None)
 
     else:
         # If test_set_pct is not specified, just write the full featurized_df
         featurized_df_path = os.path.join(data_path_featurized, "featurized_data.csv")
         logger.info(f"Writing featurized data set to {featurized_df_path}")
-        featurized_df.toPandas().to_csv(featurized_df_path)
+        featurized_df.toPandas().to_csv(featurized_df_path, index=None)
 
 
 if __name__ == "__main__":

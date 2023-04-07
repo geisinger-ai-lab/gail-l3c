@@ -44,7 +44,7 @@ def train_xgb_model(vectorizer, get_training_dataset, config):
 
     # Train a XGBoost model
     # TODO move these to the config?
-    random_seed = config["infer"].get("random_seed")
+    random_seed = config["train"].get("random_seed")
     clf = xgb.XGBClassifier(
         max_depth=8,
         min_child_weight=1,
