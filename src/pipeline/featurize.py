@@ -25,6 +25,7 @@ from src.common import (
 )
 from src.features.demographics import person_demographics
 from src.features.diagnoses import get_diagnoses
+from src.features.index_range import get_index_range
 from src.features.labs import get_labs
 from src.features.medications import get_meds_dataset
 from src.features.procedures import get_procedure_dataset
@@ -36,7 +37,6 @@ spark = get_spark_session()
 
 
 def load_omop_data(config):
-
     # Load OMOP data as spark dataframes
     data_path_raw = config["featurize"]["data_path_raw"]
     drug_exposure_path = os.path.join(data_path_raw, "drug_exposure.csv")
@@ -52,10 +52,14 @@ def load_omop_data(config):
     person = spark.read.csv(person_path, header=True, inferSchema=True)
 
     condition_occurrence_path = os.path.join(data_path_raw, "condition_occurrence.csv")
-    condition_occurrence = spark.read.csv(condition_occurrence_path, header=True, inferSchema=True)
+    condition_occurrence = spark.read.csv(
+        condition_occurrence_path, header=True, inferSchema=True
+    )
 
     procedure_occurrence_path = os.path.join(data_path_raw, "procedure_occurrence.csv")
-    procedure_occurrence = spark.read.csv(procedure_occurrence_path, header=True, inferSchema=True)
+    procedure_occurrence = spark.read.csv(
+        procedure_occurrence_path, header=True, inferSchema=True
+    )
 
     return (
         condition_occurrence,
@@ -68,7 +72,6 @@ def load_omop_data(config):
 
 
 def load_concept_set_members(config):
-
     # Load the concept sets file as a spark dataframe
     concept_set_members_path = config["featurize"]["concept_set_members"]
     concept_set_members = spark.read.csv(concept_set_members_path, header=True)
@@ -78,15 +81,15 @@ def load_concept_set_members(config):
 
 def load_intermediate_data(config):
     # TODO: Actually make the index_range file from raw, instead of using the mock file
-    data_path_intermediate = config["featurize"]["data_path_intermediate"]
-    index_range_path = os.path.join(data_path_intermediate, "index_range.csv")
-    index_range = spark.read.csv(index_range_path, header=True, inferSchema=True)
+    # data_path_intermediate = config["featurize"]["data_path_intermediate"]
+    # index_range_path = os.path.join(data_path_intermediate, "index_range.csv")
+    # index_range = spark.read.csv(index_range_path, header=True, inferSchema=True)
+    index_range = get_index_range(config)
 
     return index_range
 
 
 def missing_value_imputation(df_feat):
-
     ## Addressing the missing values in different cases:
 
     # Imputation with value '0': Diagnosis Count, Procedures, Medication Count, Utilization count
@@ -94,7 +97,12 @@ def missing_value_imputation(df_feat):
 
     # Imputing with -1: Smoking Status,  Measurements Values
     df = df.na.fill(
-        -1, subset=feat_smoke + feat_vitals + feat_meas_after + feat_meas_before + feat_meas_during
+        -1,
+        subset=feat_smoke
+        + feat_vitals
+        + feat_meas_after
+        + feat_meas_before
+        + feat_meas_during,
     )
 
     return df
@@ -129,26 +137,32 @@ def featurize(config_path: Text) -> None:
     demographics_features = person_demographics(person)
     diagnoses_features = get_diagnoses(condition_occurrence, concept_set_members)
     labs_features = get_labs()  # TODO <-- placeholder
-    medications_features = get_meds_dataset(concept_set_members, drug_exposure, index_range)
+    medications_features = get_meds_dataset(
+        concept_set_members, drug_exposure, index_range
+    )
     smoking_features = get_smoking_status_dataset(concept_set_members, observation)
     procedures_features = get_procedure_dataset(
         concept_set_members, procedure_occurrence, index_range
     )
-    utilization_features = get_utilization()  # TODO <-- placeholder
+    utilization_features = get_utilization(config)
     vitals_features = get_vitals_dataset(concept_set_members, measurement, index_range)
     label_df = index_range.select(["person_id", label])
 
-    logger.info(f"Utilization columns: {[c for c in utilization_features.columns]}")
-
     # Add empty columns for features that may be missing
-    demographics_features = add_missing_cols(df=demographics_features, col_list=feat_demo)
+    demographics_features = add_missing_cols(
+        df=demographics_features, col_list=feat_demo
+    )
     diagnoses_features = add_missing_cols(df=diagnoses_features, col_list=feat_dxct)
     # labs_features      = add_missing_cols(df=labs_features, col_list=feat_demo, fill_val=-1)
     medications_features = add_missing_cols(df=medications_features, col_list=feat_meds)
-    smoking_features = add_missing_cols(df=smoking_features, col_list=feat_smoke, fill_val=-1)
+    smoking_features = add_missing_cols(
+        df=smoking_features, col_list=feat_smoke, fill_val=-1
+    )
     procedures_features = add_missing_cols(df=procedures_features, col_list=feat_proc)
     utilization_features = add_missing_cols(df=utilization_features, col_list=feat_utl)
-    vitals_features = add_missing_cols(df=vitals_features, col_list=feat_vitals, fill_val=-1)
+    vitals_features = add_missing_cols(
+        df=vitals_features, col_list=feat_vitals, fill_val=-1
+    )
 
     # Join all of the features together
     featurized_df = (

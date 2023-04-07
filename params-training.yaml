@@ -1,5 +1,6 @@
 common:
   log_level: DEBUG
+  random_seed: 8675309
 featurize:
   data_path_raw: 'data/raw_sample/training'
   data_path_intermediate: 'data/intermediate/training'

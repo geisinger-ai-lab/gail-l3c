@@ -13,7 +13,6 @@ from src.common import features, get_logger, label
 
 
 def get_vectorizer(get_training_dataset):
-
     training_data = get_training_dataset
     training_columns = features
 
@@ -30,7 +29,6 @@ def get_vectorizer(get_training_dataset):
 
 
 def train_xgb_model(vectorizer, get_training_dataset, config):
-
     ## Initializations:
     # Import the training dataset in Pandas Format
     # Vectorizer in the object input type:
@@ -86,7 +84,9 @@ def train(config_path: Text) -> None:
     clf = train_xgb_model(vectorizer, featurized_df, config)
 
     # Save the model locally
-    model_path = os.path.join(config["train"]["model_path"], config["train"]["model_name"])
+    model_path = os.path.join(
+        config["train"]["model_path"], config["train"]["model_name"]
+    )
     clf.save_model(model_path)
 
 

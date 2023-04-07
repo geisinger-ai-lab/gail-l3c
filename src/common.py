@@ -396,17 +396,23 @@ def calculate_evaluation_metrics(model, df, threshold=0.5):
     TN = cm.sum() - (FP + FN + TP)
 
     ## Generating confusion matrix image:
-    disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=["No PASC", "PASC"])
+    disp = ConfusionMatrixDisplay(
+        confusion_matrix=cm, display_labels=["No PASC", "PASC"]
+    )
     disp.plot()
     cm_plot = plt.gcf()
 
     ## Generating precision, recall, f-measure scores:
     f1 = f1_score(scores["true_label"], scores["pred_label"], average="binary")
-    precision = precision_score(scores["true_label"], scores["pred_label"], average="binary")
+    precision = precision_score(
+        scores["true_label"], scores["pred_label"], average="binary"
+    )
     recall = recall_score(scores["true_label"], scores["pred_label"], average="binary")
 
     ## Precision-Recall Curve
-    p, r, thresholds = precision_recall_curve(scores["true_label"], scores["predict_prob"])
+    p, r, thresholds = precision_recall_curve(
+        scores["true_label"], scores["predict_prob"]
+    )
     plt.figure()
     plt.plot(r, p)
     plt.xlabel("Recall")
@@ -448,7 +454,9 @@ def calculate_evaluation_metrics(model, df, threshold=0.5):
     pred_dist = plt.gcf()
 
     ## Average precision
-    average_precision = average_precision_score(scores["true_label"], scores["predict_prob"])
+    average_precision = average_precision_score(
+        scores["true_label"], scores["predict_prob"]
+    )
 
     ## AU-ROC score:
     auroc = roc_auc_score(scores["true_label"], scores["predict_prob"])

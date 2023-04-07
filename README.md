@@ -15,12 +15,11 @@ This repository includes all of the code we submitted as a part of the L3C. Init
     - `src/pipeline/`: python scripts to 1) process raw data and save a table of features 2) train the model 3) run inference on the test set
 - `documents/`: The GAIL L3C submission write-up
 - `data/`: raw OMOP synpuf data, as well as interum data files created during featurization, the featurized data sets, and predictions
-- `models/`: to write models created during training, and read trained models for inference
-- `notebooks/`: supplementary code notebooks 
+- `models/`: to write models created during training, and read trained models for inference 
 
 ## Getting started
 
-Common tasks are supported by the Makefile at the project root. A linux environment needs build-essential installed in order to use make, e.g. `sudo apt-get install build-essential` on Ubuntu. Also, pyspark requires Java, e.g. `sudo apt-get install default-jre` on Ubuntu. The data science node has these installed already. I haven't tried on Windows directly, so let me know if you run into issues. Also, if you prefer using conda instead of venv for python virtual environments, please feel free to use the tool you like.
+Common tasks are supported by the Makefile at the project root. A linux environment needs build-essential installed in order to use make, e.g. `sudo apt-get install build-essential` on Ubuntu. Also, pyspark requires Java, e.g. `sudo apt-get install default-jre` on Ubuntu.
 
 After cloning this repo and cd'ing into the project root, create a virtual environment using the Makefile
 ```sh
@@ -42,7 +41,7 @@ After making changes, you can format the code before committing.
 make format
 ```
 
-The project is structured with high level pipeline steps in `src/pipeline`. All configuration for the project can be placed in `params.yaml` at the project root. All pipeline steps, e.g. featurize, take the config filepath as an argument. The pipeline steps can be run as follows:
+The project is structured with high level pipeline steps in `src/pipeline`. All configuration for the project can be placed in `params.yaml` at the project root. All pipeline steps take the config file path as an argument. The pipeline steps can be run as follows:
 
 Featurize:
 ```sh
@@ -59,16 +58,16 @@ Infer:
 python src/pipeline/infer.py --config params.yaml
 ```
 
-Pre-configured param files are created for the demo training and testing data samples, which can be run using make commands
+Pre-configured param files are created for the demo training and testing data samples, which can be run using make commands.
 
 Run featurize, training, and inference for the training set:
 ```sh
-make run-training
+make train
 ```
 
-Run featurize inference for the testing set:
+Run featurize and inference for the testing set:
 ```sh
-make run-testing
+make infer
 ```
 
 

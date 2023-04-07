@@ -4,7 +4,6 @@ spark = get_spark_session()
 
 
 def get_smoking_concepts(concept_set_members):
-
     concept_set_members.createOrReplaceTempView("concept_set_members")
 
     sql = """SELECT *, 'smoker' as feature_name
@@ -15,7 +14,6 @@ where codeset_id = 628969102 -- TOBACCO SMOKER (v2)
 
 
 def get_smoking_observations(observation, smoking_concepts):
-
     observation.createOrReplaceTempView("observation")
     smoking_concepts.createOrReplaceTempView("smoking_concepts")
 
