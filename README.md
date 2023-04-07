@@ -1,33 +1,22 @@
 # GAIL (Geisinger AI Lab) L3C Submission
 
-## Who's working on what?
+This is the public repository for the Geisinger AI Lab (GAIL) submission to the [NIH Long COVID Computational Challenge (L3C)](https://www.challenge.gov/?challenge=l3c)
 
-| Feature type   | OMOP table  | owner |
-| -------------- | ----------- | ----- |
-| Demographics   | person      | Gaurav
-| Lab results    | measurement | Gaurav/Tamanna
-| Vitals         | measurement | Elliot
-| Diagnoses      | contition   | Gaurav/Biplab
-| Procedures     | procedure   | Tamanna
-| Utilization    | visit       | Grant
-| Medications    | drug        | Elliot
-| Smoking Status | observation | Elliot
-| Index Range    | micro/macro | Grant
+Our submission received [second place overall](https://www.linkedin.com/pulse/announcing-nih-long-covid-computational/)! Congratulations to the other finalists and honorable mentions, Convalesco (U Chicago / Argonne National Lab), UC Berkeley, UW Madison, U Penn, and Ruvos. 
 
-Model train/test: Gaurav
-
-makefile/venv/global_code/setup.py: Grant 
+This repository includes all of the code we submitted as a part of the L3C. Initially developed within the [N3C Enclave](https://covid.cd2h.org/enclave), the code is adapted here to run locally with csv files in the [OMOP Common Data Model](https://ohdsi.github.io/CommonDataModel/) format. A small sample of simulated claims data (synpuf) is included in the repo for demo purposes. 
 
 ## Directory structure
 
-- `raw/`: raw export from the N3C enclave workbook
 - `src/`
-    - `src/features/`: python functions to read raw data and output formatted feature sets, organized by feature type (demographics, labs, meds, etc.)
+    - `src/features/`: python functions to read data and output formatted feature sets, organized by feature type (demographics, labs, meds, etc.)
     - `src/training/`: python functions to train the model
     - `src/inference/`: python functions run the trained model on the test set
     - `src/pipeline/`: python scripts to 1) process raw data and save a table of features 2) train the model 3) run inference on the test set
-- `documents/`: the L3C write-up
-- `data/`: home for raw train/test OMOP synpuf data, as well as interum data representations created during data preparation
+- `documents/`: The GAIL L3C submission write-up
+- `data/`: raw OMOP synpuf data, as well as interum data files created during featurization, the featurized data sets, and predictions
+- `models/`: to write models created during training, and read trained models for inference
+- `notebooks/`: supplementary code notebooks 
 
 ## Getting started
 
@@ -70,13 +59,17 @@ Infer:
 python src/pipeline/infer.py --config params.yaml
 ```
 
-The individual transforms originally created in the enclave can be mapped to lower level funcitons within `src`. For example, the utilization transforms would be mapped to functions in `src/features/utilization.py`. The utilization module also has a 'main' function called `get_utilization`, which would call all of the individual transform functions and return the resulting utilization DataFrame. This way, the featurize pipeline step can make one call to each feature module and then merge the DataFrames as needed for the model. 
+Pre-configured param files are created for the demo training and testing data samples, which can be run using make commands
 
-As of this writing, the data is not available in the repo. Once available, we can use `spark.read.csv` to read the raw data. I suggest all subsequet read/write operations should use parquet format for efficiency, but I'm open to other suggestions.
+Run featurize, training, and inference for the training set:
+```sh
+make run-training
+```
 
-In general, when you are ready to make changes, do a `git pull` first to get the latest version of the repo. Then create a new branch with `git checkout -b {my_new_branch}` so that your changes go into the new branch instead of directly into main. After pushing your work to the remote repo on the new branch, create a pull request on GitHub whenever you'd like others to review or you want to merge into main. You can look at my [git guide](https://github.com/g-delong/git_guide) for more info on using git, but of course there's a ton of other info out there on the webs. 
-
-
+Run featurize inference for the testing set:
+```sh
+make run-testing
+```
 
 
     
