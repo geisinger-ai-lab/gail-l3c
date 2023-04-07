@@ -51,6 +51,16 @@ test:
 install:
 	$(PYTHON_INTERPRETER) setup.py install
 
+run-training:
+	$(PYTHON_INTERPRETER) src/pipeline/featurize.py --config params-training.yaml
+	$(PYTHON_INTERPRETER) src/pipeline/train.py --config params-training.yaml
+	$(PYTHON_INTERPRETER) src/pipeline/infer.py --config params-training.yaml
+
+run-testing:
+	$(PYTHON_INTERPRETER) src/pipeline/featurize.py --config params-testing.yaml
+	$(PYTHON_INTERPRETER) src/pipeline/infer.py --config params-testing.yaml
+
+
 #################################################################################
 # PROJECT RULES                                                                 #
 #################################################################################

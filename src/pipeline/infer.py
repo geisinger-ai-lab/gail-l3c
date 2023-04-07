@@ -3,11 +3,10 @@ import os
 from typing import Text
 
 import pandas as pd
+import xgboost as xgb
 import yaml
 
-import xgboost as xgb
-
-from src.common import get_logger, features, calculate_evaluation_metrics
+from src.common import calculate_evaluation_metrics, features, get_logger
 
 
 def infer(config_path: Text) -> None:
@@ -38,17 +37,18 @@ def infer(config_path: Text) -> None:
         logger.info(f"Processing {data_file_name}...")
 
         featurized_df_path = os.path.join(
-            config["featurize"]["data_path_featurized"], 
-            data_file_name
+            config["featurize"]["data_path_featurized"], data_file_name
         )
         featurized_df = pd.read_csv(featurized_df_path)
 
         # Predict
         prediction_df = featurized_df[["person_id"]].copy()
-        prediction_df["predict_prob"] = xgb_model.predict_proba( featurized_df[features] )[:,1]
+        prediction_df["predict_prob"] = xgb_model.predict_proba(featurized_df[features])[:, 1]
 
         # Save predictions (person_id, prob, pred_label)
-        predictions_path = os.path.join(config["infer"]["predictions_path"], data_file_name + "predictions.csv")
+        predictions_path = os.path.join(
+            config["infer"]["predictions_path"], data_file_name + "predictions.csv"
+        )
         logger.info(f"Saving predicted probabilities to {predictions_path}...")
         prediction_df.to_csv(predictions_path, index=False)
 
@@ -63,8 +63,8 @@ def infer(config_path: Text) -> None:
         logger.info(f"f1_score@{threshold}: {metrics_dict[f'f1_score@{threshold}']}")
         logger.info(f"precision@{threshold}: {metrics_dict[f'precision@{threshold}']}")
         logger.info(f"recall@{threshold}: {metrics_dict[f'recall@{threshold}']}")
-        logger.info("---"*12)
-    
+        logger.info("---" * 12)
+
 
 if __name__ == "__main__":
     args_parser = argparse.ArgumentParser()
