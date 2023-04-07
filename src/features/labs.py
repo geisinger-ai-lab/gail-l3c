@@ -1,6 +1,9 @@
 from itertools import chain
 
+from pyspark.sql import types as T
 from pyspark.sql.functions import col, create_map, lit, when
+
+from src.common import get_spark_session
 
 # COHORT_WT_HT_CURATED
 """
@@ -64,12 +67,85 @@ SELECT LABS.person_id,
 """
 
 
-@transform_pandas(
-    Output(rid="ri.foundry.main.dataset.489b4135-2d60-45c7-ac58-b2d6b161e4b3"),
-    COHORT_WT_HT_CURATED=Input(
-        rid="ri.foundry.main.dataset.2eeb4595-97b9-45a3-9430-6b76e738a3e0"
-    ),
-)
+def get_labs():
+    spark = get_spark_session()
+
+    ## Measurement Features:
+    feat_meas = [
+        "body_height_value",
+        "body_weight_value",
+        "alanine_aminotransferase_value",
+        "albumin_value",
+        "albumin_bcg_value",
+        "albumin_bcp_value",
+        "albumin_electrophoresis_value",
+        "albumin_globulin_ratio_value",
+        "alkaline_phosphatase_value",
+        "anion_gap_value",
+        "aspartate_aminotransferase_value",
+        "bicarbonate_value",
+        "bilirubin_total_value",
+        "bun_value",
+        "bun_creatinine_ratio_value",
+        "calcium_value",
+        "carbon_dioxide_total_value",
+        "chloride_value",
+        "creatinine_value",
+        "globulin_value",
+        "glomerular_filt_CKD_value",
+        "glomerular_filt_blacks_CKD_value",
+        "glomerular_filt_blacks_MDRD_value",
+        "glomerular_filt_females_MDRD_value",
+        "glomerular_filt_nonblacks_CKD_value",
+        "glomerular_filt_nonblacks_MDRD_value",
+        "glucose_value",
+        "potassium_value",
+        "protein_value",
+        "sodium_value",
+        "absolute_band_neutrophils_value",
+        "absolute_basophils_value",
+        "absolute_eosinophils_value",
+        "absolute_lymph_value",
+        "absolute_monocytes_value",
+        "absolute_neutrophils_value",
+        "absolute_other_value",
+        "absolute_var_lymph_value",
+        "cbc_panel_value",
+        "hct_value",
+        "hgb_value",
+        "mch_value",
+        "mchc_value",
+        "mcv_value",
+        "mpv_value",
+        "pdw_volume_value",
+        "percent_band_neutrophils_value",
+        "percent_basophils_value",
+        "percent_eosinophils_value",
+        "percent_granulocytes_value",
+        "percent_lymph_value",
+        "percent_monocytes_value",
+        "percent_neutrophils_value",
+        "percent_other_value",
+        "percent_var_lymph_value",
+        "platelet_count_value",
+        "rbc_count_value",
+        "rdw_ratio_value",
+        "rdw_volume_value",
+        "wbc_count_value",
+    ]
+    feat_meas_after = ["after_" + feat for feat in feat_meas]
+    feat_meas_before = ["before_" + feat for feat in feat_meas]
+    feat_meas_during = ["during_" + feat for feat in feat_meas]
+    feat_meas_cols = feat_meas_after + feat_meas_before + feat_meas_during
+
+    schema = T.StructType(
+        [T.StructField("person_id", T.IntegerType())]
+        + [T.StructField(c, T.DoubleType()) for c in feat_meas_cols]
+    )
+
+    return spark.createDataFrame([], schema=schema)
+
+
 def COHORT_WT_HT_PIVOT(COHORT_WT_HT_CURATED):
     ## Spark dataframe for the comprehensive metabolic panel:
     df = COHORT_WT_HT_CURATED

@@ -12,6 +12,8 @@ from pyspark.sql import functions as F
 
 from src.common import get_spark_session, rename_cols
 
+spark = get_spark_session()
+
 
 def get_meds_concepts(concept_set_members):
     """
