@@ -25,7 +25,8 @@ By constraining ourselves to build a model that is implementation ready, we made
 While these constraints might lower the statistical performance of our model, we believe they increase the likelihood of the model being implemented.
 
 
-[Figure 1]
+**Figure 1.** Potential care timelines for a patient likely to be diagnosed with long COVID (PASC)
+![Figure 1](figures\figure_1.png)
 
 In our approach, we started by observing that the etiology of long COVID is presently not well-understood and there is noise in the PASC/No PASC labels. Therefore, even a perfectly predictive model on this dataset will miss long COVID cases in a real setting. Knowing this, doctors are likely to use the prediction model for risk stratification and screening, rather than diagnosing long COVID (see Figure 1). As such, our model focuses on having high recall so that the largest share of potentially positive cases are flagged for follow-up. 
 
@@ -67,11 +68,20 @@ Our final model was an extreme gradient boosted decision tree (XGBoost) for clas
 
 Other classical classifiers (Logistic regression, Decision tree, Random Forest, Gradient-boosted tree and Multilayer perceptron) were also investigated with the same benchmark datasets. The efficacy of different models was evaluated in terms of f1 score, precision, recall and area under the ROC (AUROC) curve. Table 1 presents the performance of each classifier on the validation set. The XGBoost model has the highest AUROC, F1 score as well as recall. 
 
-[Table 1]
+**Table 1.** Classifier performance on the validation data
+| **Model**                 | recall | AUROC | precision | f1_score |
+| ------------------------- | ------ | ----- | --------- | -------- |
+| **Logistic regression**   | 0.71   | 0.84  | 0.39      | 0.51     |
+| **Decision tree**         | 0.46   | 0.68  | 0.45      | 0.46     |
+| **Random forest**         | 0.41   | 0.90  | 0.69      | 0.52     |
+| **Gradient-boosted tree** | 0.35   | 0.89  | 0.68      | 0.47     |
+| **Multilayer perceptron** | 0.20   | 0.82  | 0.50      | 0.28     |
+| **XGBoost**               | 0.81   | 0.92  | 0.50      | 0.62     |
 
 Our final model used XGBoost with recall = 81%, AUROC = 0.92, average precision = 0.63, and an F-1 score = 0.62.
 
-[Performane Figures]
+**Performance plots for the final XGBoost model:**
+![](figures/performance_plots.png)
 
 ### Methods for Model Interpretability and Workflow Integration
 In real-world machine learning implementations at Geisinger Health, we have found that using predictive models to flag high-risk patients for reprioritization and/or confirmatory follow-up screening is a cost-effective and high-value approach for healthcare care delivery. We have successfully used this approach to screen for colorectal cancer, intracranial hemorrhage, and high-risk influenza [3, 4, 5], and the same approach is being applied for numerous additional conditions. 
@@ -92,20 +102,24 @@ As a tool for clinical decision support, GAIL Long COVID Risk scores can be pres
 
 Figure 2 shows, side-by-side, how the Long COVID (PASC) Risk score and top contributing factors would be presented to end users in Epic. You can see that, while both risk scores are high, each narrative identifies a different set of features. These top contributing and mitigating factors are based on the weights of the Shapley values, presented in Figures 3 and 4, but synthesized into a brief, clinically relevant summary. 
 
-[Figure 2]
+**Figure 2.** Long COVID (PASC) Risk predictions for Patient 1 (left) and Patient 2 (Right), as displayed in the Epic EHR 
+![](figures\Risk_displays.png)
 
 Patient 1 is a 79-year-old who was not hospitalized for their COVID index, but does have a number of risk factors including hypertension and asthma, and a history of hospitalizations with a long length of stay. Our model estimated at 92% chance of developing PASC, and they did indeed develop long COVID after the index data range. A summary of the top features, sorted by shapely values, is presented in Figure 3. 
 
 In contrast with Patient 1, Patient 2 (Figure 4) is only 20 years old, leading one to think they should be lower risk for PASC. However, Patient 2 was admitted during their COVID index, and had a long, complicated hospital stay. Our model estimated a 74% chance of developing long COVID, which they did eventually screen positive for. 
 
-[Figure 3] Shapley values indicate that patient 1's average length of stay, hypertension, asthma drugs, and age are among the top reasons for a high risk score of 92%
+**Figure 3.** Shapley values indicate that patient 1's average length of stay, hypertension, asthma drugs, and age are among the top reasons for a high risk score of 92%
+![](figures/patient_1_shap.png)
 
-[Figure 4] Shapley values indicate that patient 2's ECG performed during the COVID Index date range, as well as corticosteroids and remdesivir being administered, contribute to their high risk score of 74%. 
+**Figure 4.** Shapley values indicate that patient 2's ECG performed during the COVID Index date range, as well as corticosteroids and remdesivir being administered, contribute to their high risk score of 74%. 
+![](figures/patient_2_shap.png)
 
 ### Sub-group analyses for bias/fairness
 In Table 2, below, we show that the performance of the model in various demographic subgroups of the data, denoted by the subgroup category and value columns. We found that AUCs were comparably performant across most subgroups. However, the model tends to perform slightly better for black patients and slightly worse for white patients. 
 
-Table 2. Model performance across various demographic subgroups
+**Table 2.** Model performance across various demographic subgroups
+![](figures/subgroup_analysis.jpg)
 
 ### Limitations and future directions
 Several improvements can be made to improve model performance in subsequent work. More sophisticated methods could be employed to encode the temporal structure of patient measurements. Rather than encoding patient trajectories to just three time-points, for instance, functional regression could be used to incorporate the entire time-series of inputs. Important information regarding the severity of patient status could be incorporated from clinical notes associated with prior visits. The set of diagnosis and procedure codes as well as medication orders could also be expanded. 
