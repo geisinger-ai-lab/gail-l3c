@@ -1,5 +1,6 @@
 import argparse
 from typing import List, Text, Tuple, Union
+import os
 
 import pandas as pd
 import yaml
@@ -8,13 +9,14 @@ from pyspark.sql import functions as F
 from pyspark.sql import types as T
 
 from src.common import get_spark_session
+from src.features.index_range import get_index_range, get_micro_macro_long_covid
 
 ## Utilization
 CAP_LOS_VALUES = False
 LOS_MAX = 365
 
 
-def create_utilization(config: dict):
+def get_utilization(config: dict) -> DataFrame:
     (
         microvisits_to_macrovisits,
         concept_set_members,
@@ -55,35 +57,7 @@ def create_utilization(config: dict):
 
     imputed_final = impute_features(final_util)
 
-    imputed_final.write.parquet()
-
-
-def get_utilization(config: dict) -> DataFrame:
-    spark = get_spark_session()
-
-    schema = T.StructType(
-        [
-            T.StructField("person_id", T.StringType()),
-            T.StructField("is_index_ed", T.IntegerType()),
-            T.StructField("is_index_ip", T.IntegerType()),
-            T.StructField("is_index_tele", T.IntegerType()),
-            T.StructField("is_index_op", T.IntegerType()),
-            T.StructField("avg_los", T.DoubleType()),
-            T.StructField("avg_icu_los", T.DoubleType()),
-            T.StructField("before_ed_cnt", T.LongType()),
-            T.StructField("before_ip_cnt", T.LongType()),
-            T.StructField("before_op_cnt", T.LongType()),
-            T.StructField("during_ed_cnt", T.LongType()),
-            T.StructField("during_ip_cnt", T.LongType()),
-            T.StructField("during_op_cnt", T.LongType()),
-            T.StructField("after_ed_cnt", T.LongType()),
-            T.StructField("after_ip_cnt", T.LongType()),
-            T.StructField("after_op_cnt", T.LongType()),
-        ]
-    )
-    # data = [["1"] + [1] * 4 + [1.0] * 2 + [1] * 9]
-    data = []
-    return spark.createDataFrame(data, schema=schema)
+    return imputed_final
 
 
 def with_concept_name(
@@ -191,7 +165,7 @@ def add_los_covid_index(
     datediff(coalesce(icu.macrovisit_end_date, icu.visit_end_date), coalesce(icu.macrovisit_start_date, icu.visit_start_date)) 
     else 0 end los
     FROM add_icu icu 
-    left join Long_COVID_Silver_Standard s on icu.person_id = s.person_id
+    left join long_covid_silver_standard s on icu.person_id = s.person_id
     """
     los_covid_index = spark.sql(query)
     return los_covid_index
@@ -424,26 +398,22 @@ def impute_features(final_df):
 
 def get_input_data(config: dict) -> Tuple[DataFrame]:
     spark = get_spark_session()
-    microvisits_to_macrovisits = spark.read.csv(
-        config["featurize"]["micro_to_macro_path"], header=True, inferSchema=True
-    )
+    data_path_raw = config["featurize"]["data_path_raw"]
+    
     concept_set_members = spark.read.csv(
         config["featurize"]["concept_set_members"], header=True, inferSchema=True
     )
     procedure_occurrence = spark.read.csv(
-        config["featurize"]["procedure_occurrence"], header=True, inferSchema=True
+        os.path.join(data_path_raw, "procedure_occurrence.csv"), header=True, inferSchema=True
     )
     condition_occurrence = spark.read.csv(
-        config["featurize"]["condition_occurrence"], header=True, inferSchema=True
+        os.path.join(data_path_raw, "condition_occurrence.csv"), header=True, inferSchema=True
     )
     observation = spark.read.csv(
-        config["featurize"]["observation"], header=True, inferSchema=True
+        os.path.join(data_path_raw, "observation.csv"), header=True, inferSchema=True
     )
-    long_covid_silver_standard = spark.read.csv(
-        config["featurize"]["long_covid_path"], header=True, inferSchema=True
-    )
-    # index_range_path
-    index_range = spark.read.parquet(config["featurize"]["index_range_path"])
+    (long_covid_silver_standard, microvisits_to_macrovisits) = get_micro_macro_long_covid(config)
+    index_range = get_index_range(config)
     return (
         microvisits_to_macrovisits,
         concept_set_members,
@@ -465,4 +435,5 @@ if __name__ == "__main__":
     with open(config_path) as conf_file:
         config = yaml.safe_load(conf_file)
 
-    create_utilization(config)
+    df = get_utilization(config)
+    df.show()

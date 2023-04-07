@@ -1,4 +1,4 @@
-.PHONY: clean format requirements test venv install
+.PHONY: clean format requirements venv install train infer
 
 #################################################################################
 # GLOBALS                                                                       #
@@ -44,19 +44,16 @@ else
 	@echo "Run 'source .venv/bin/activate' to activate."
 endif
 
-## Unit tests
-test:
-	pytest tests
 
 install:
 	$(PYTHON_INTERPRETER) setup.py install
 
-run-training:
+train:
 	$(PYTHON_INTERPRETER) src/pipeline/featurize.py --config params-training.yaml
 	$(PYTHON_INTERPRETER) src/pipeline/train.py --config params-training.yaml
 	$(PYTHON_INTERPRETER) src/pipeline/infer.py --config params-training.yaml
 
-run-testing:
+infer:
 	$(PYTHON_INTERPRETER) src/pipeline/featurize.py --config params-testing.yaml
 	$(PYTHON_INTERPRETER) src/pipeline/infer.py --config params-testing.yaml
 

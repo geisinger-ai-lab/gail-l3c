@@ -31,6 +31,7 @@ from src.features.procedures import get_procedure_dataset
 from src.features.smoking_status import get_smoking_status_dataset
 from src.features.utilization import get_utilization
 from src.features.vitals import get_vitals_dataset
+from src.features.index_range import get_index_range
 
 spark = get_spark_session()
 
@@ -78,9 +79,10 @@ def load_concept_set_members(config):
 
 def load_intermediate_data(config):
     # TODO: Actually make the index_range file from raw, instead of using the mock file
-    data_path_intermediate = config["featurize"]["data_path_intermediate"]
-    index_range_path = os.path.join(data_path_intermediate, "index_range.csv")
-    index_range = spark.read.csv(index_range_path, header=True, inferSchema=True)
+    # data_path_intermediate = config["featurize"]["data_path_intermediate"]
+    # index_range_path = os.path.join(data_path_intermediate, "index_range.csv")
+    # index_range = spark.read.csv(index_range_path, header=True, inferSchema=True)
+    index_range = get_index_range(config)
 
     return index_range
 
@@ -134,11 +136,9 @@ def featurize(config_path: Text) -> None:
     procedures_features = get_procedure_dataset(
         concept_set_members, procedure_occurrence, index_range
     )
-    utilization_features = get_utilization()  # TODO <-- placeholder
+    utilization_features = get_utilization(config) 
     vitals_features = get_vitals_dataset(concept_set_members, measurement, index_range)
     label_df = index_range.select(["person_id", label])
-
-    logger.info(f"Utilization columns: {[c for c in utilization_features.columns]}")
 
     # Add empty columns for features that may be missing
     demographics_features = add_missing_cols(df=demographics_features, col_list=feat_demo)

@@ -1,6 +1,6 @@
 common:
   log_level: DEBUG
-  index_range_path: 'data/index_range.csv'
+  random_seed: 8675309
 featurize:
   data_path_raw: 'data/raw_sample/training'
   data_path_intermediate: 'data/intermediate/training'
