@@ -26,7 +26,7 @@ While these constraints might lower the statistical performance of our model, we
 
 
 **Figure 1.** Potential care timelines for a patient likely to be diagnosed with long COVID (PASC)
-![Figure 1](figures\figure_1.png)
+![Figure 1](figures/figure_1.png)
 
 In our approach, we started by observing that the etiology of long COVID is presently not well-understood and there is noise in the PASC/No PASC labels. Therefore, even a perfectly predictive model on this dataset will miss long COVID cases in a real setting. Knowing this, doctors are likely to use the prediction model for risk stratification and screening, rather than diagnosing long COVID (see Figure 1). As such, our model focuses on having high recall so that the largest share of potentially positive cases are flagged for follow-up. 
 
@@ -81,7 +81,7 @@ Other classical classifiers (Logistic regression, Decision tree, Random Forest, 
 Our final model used XGBoost with recall = 81%, AUROC = 0.92, average precision = 0.63, and an F-1 score = 0.62.
 
 **Performance plots for the final XGBoost model:**
-![](figures/performance_plots.png)
+![](figures/Performance_plots.png)
 
 ### Methods for Model Interpretability and Workflow Integration
 In real-world machine learning implementations at Geisinger Health, we have found that using predictive models to flag high-risk patients for reprioritization and/or confirmatory follow-up screening is a cost-effective and high-value approach for healthcare care delivery. We have successfully used this approach to screen for colorectal cancer, intracranial hemorrhage, and high-risk influenza [3, 4, 5], and the same approach is being applied for numerous additional conditions. 
@@ -103,7 +103,7 @@ As a tool for clinical decision support, GAIL Long COVID Risk scores can be pres
 Figure 2 shows, side-by-side, how the Long COVID (PASC) Risk score and top contributing factors would be presented to end users in Epic. You can see that, while both risk scores are high, each narrative identifies a different set of features. These top contributing and mitigating factors are based on the weights of the Shapley values, presented in Figures 3 and 4, but synthesized into a brief, clinically relevant summary. 
 
 **Figure 2.** Long COVID (PASC) Risk predictions for Patient 1 (left) and Patient 2 (Right), as displayed in the Epic EHR 
-![](figures\Risk_displays.png)
+![](figures/Risk_displays.png)
 
 Patient 1 is a 79-year-old who was not hospitalized for their COVID index, but does have a number of risk factors including hypertension and asthma, and a history of hospitalizations with a long length of stay. Our model estimated at 92% chance of developing PASC, and they did indeed develop long COVID after the index data range. A summary of the top features, sorted by shapely values, is presented in Figure 3. 
 
