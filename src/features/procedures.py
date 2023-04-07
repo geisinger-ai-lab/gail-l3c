@@ -63,7 +63,6 @@ ORDER BY pmc.person_id
 
 
 def procedure_time_grouped(all_procedure_with_time):
-
     """
     Procedure grouped, needs to be a PySpark function
 
@@ -116,7 +115,6 @@ def procedure_time_grouped(all_procedure_with_time):
 
 
 def proc_dataset(proc_grouped):
-
     df = proc_grouped
     df1 = (
         df.groupBy("person_id")
@@ -152,7 +150,6 @@ def get_procedure_dataset(concept_set_members, procedure_occurrence, index_range
 
 
 if __name__ == "__main__":
-
     spark = get_spark_session()
 
     # Load data as spark DF
@@ -169,6 +166,8 @@ if __name__ == "__main__":
     )
 
     # Run the procedure data ETL
-    procedure_df = get_procedure_dataset(concept_set_members, procedure_occurrence, index_range)
+    procedure_df = get_procedure_dataset(
+        concept_set_members, procedure_occurrence, index_range
+    )
 
     procedure_df.show()

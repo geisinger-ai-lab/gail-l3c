@@ -12,13 +12,14 @@ from pyspark.sql.types import DateType
 
 from src.common import get_logger, get_spark_session
 
-def get_index_range(
-    config: dict
-) -> DataFrame:
+
+def get_index_range(config: dict) -> DataFrame:
     spark = get_spark_session()
 
-    (long_covid_silver_standard,
-     microvisits_to_macrovisits) = get_micro_macro_long_covid(config)
+    (
+        long_covid_silver_standard,
+        microvisits_to_macrovisits,
+    ) = get_micro_macro_long_covid(config)
 
     long_covid_silver_standard.createOrReplaceTempView("long_covid_silver_standard")
     microvisits_to_macrovisits.createOrReplaceTempView("microvisits_to_macrovisits")
@@ -85,15 +86,11 @@ def get_micro_macro_long_covid(config: dict) -> Tuple[DataFrame, DataFrame]:
 
     data_path_raw = config["featurize"]["data_path_raw"]
     micro_macro_path = os.path.join(data_path_raw, "microvisits_to_macrovisits.csv")
-    micro_macro = spark.read.csv(
-        micro_macro_path, header=True, inferSchema=True
-    )
+    micro_macro = spark.read.csv(micro_macro_path, header=True, inferSchema=True)
     micro_macro = with_macro_columns(micro_macro)
 
     long_covid_path = os.path.join(data_path_raw, "long_covid_silver_standard.csv")
-    long_covid = spark.read.csv(
-        long_covid_path, header=True, inferSchema=True
-    )
+    long_covid = spark.read.csv(long_covid_path, header=True, inferSchema=True)
     long_covid = with_pasc_columns(long_covid, config)
     return (long_covid, micro_macro)
 
@@ -106,19 +103,23 @@ def with_macro_columns(micro_macro: DataFrame) -> DataFrame:
     micro_macro = micro_macro.withColumn(
         "macrovisit_end_date", F.lit(None).cast(DateType())
     )
-    micro_macro = micro_macro.withColumn("visit_concept_name", F.lit(None).cast("string"))
+    micro_macro = micro_macro.withColumn(
+        "visit_concept_name", F.lit(None).cast("string")
+    )
     return micro_macro
 
 
 def with_pasc_columns(long_covid: DataFrame, config: dict) -> DataFrame:
     # if this is test data, fill in missing columns
     if len(long_covid.columns) <= 2:
-        random_seed = config['common']['random_seed']
-        long_covid = long_covid.withColumn('rand', F.rand(random_seed))
+        random_seed = config["common"]["random_seed"]
+        long_covid = long_covid.withColumn("rand", F.rand(random_seed))
 
-        long_covid = long_covid.withColumn('pasc_code_after_four_weeks', 
-                                           F.when(F.col('rand') < (1./6), 1).otherwise(0))
-        long_covid = long_covid.drop('rand')
+        long_covid = long_covid.withColumn(
+            "pasc_code_after_four_weeks",
+            F.when(F.col("rand") < (1.0 / 6), 1).otherwise(0),
+        )
+        long_covid = long_covid.drop("rand")
 
         long_covid = long_covid.withColumn(
             "pasc_code_prior_four_weeks", F.lit(None).cast("int")

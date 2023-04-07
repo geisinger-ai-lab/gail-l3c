@@ -26,7 +26,9 @@ def infer(config_path: Text) -> None:
     logger.info("Generating inferences...")
 
     # Load the model
-    model_path = os.path.join(config["train"]["model_path"], config["train"]["model_name"])
+    model_path = os.path.join(
+        config["train"]["model_path"], config["train"]["model_name"]
+    )
     xgb_model = xgb.XGBClassifier()
     xgb_model.load_model(model_path)
 
@@ -43,20 +45,26 @@ def infer(config_path: Text) -> None:
 
         # Predict
         prediction_df = featurized_df[["person_id"]].copy()
-        prediction_df["predict_prob"] = xgb_model.predict_proba(featurized_df[features])[:, 1]
+        prediction_df["predict_prob"] = xgb_model.predict_proba(
+            featurized_df[features]
+        )[:, 1]
 
         # Save predictions (person_id, prob, pred_label)
         predictions_path = config["infer"]["predictions_path"]
         if not os.path.exists(predictions_path):
             os.mkdir(predictions_path)
-        predictions_csv = os.path.join(predictions_path, data_file_name + "-predictions.csv")
+        predictions_csv = os.path.join(
+            predictions_path, data_file_name + "-predictions.csv"
+        )
         logger.info(f"Saving predicted probabilities to {predictions_path}...")
         prediction_df.to_csv(predictions_csv, index=False)
 
         # Print evaluation metrics
         # TODO: make a nicer printed summary and save plots to png
         logger.info(f"Performance metrics summary:")
-        metrics_dict = calculate_evaluation_metrics(xgb_model, featurized_df, threshold=threshold)
+        metrics_dict = calculate_evaluation_metrics(
+            xgb_model, featurized_df, threshold=threshold
+        )
         logger.info(f"AUC: {metrics_dict['area_under_roc']}")
         logger.info(f"average_precision: {metrics_dict['average_precision']}")
         logger.info(f"brier_score: {metrics_dict['brier_score']}")

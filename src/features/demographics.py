@@ -4,12 +4,14 @@ function to load demographics data)
 """
 import numpy as np
 import pandas as pd
-#from pyspark.sql import types, functions as T,F
-from pyspark.sql.functions import when
 from pyspark.sql import functions as F
+
+# from pyspark.sql import types, functions as T,F
+from pyspark.sql.functions import when
+
 from src.common import get_spark_session, rename_cols
 
-'''
+"""
 def get_person():
     spark = get_spark_session()
     schema = T.StructType(
@@ -43,7 +45,7 @@ def get_person():
         ]
     )
     return spark.createDataFrame(data, schema=schema)
-'''
+"""
 
 """
     columns:
@@ -77,34 +79,39 @@ def get_person():
 
 
 def person_demographics(demographics):
+    # add gender names column
+    demographics = demographics.withColumn(
+        "gender_concept_name",
+        when((demographics.gender_concept_id == 8532), "FEMALE")
+        .when((demographics.gender_concept_id == 8507), "MALE")
+        .otherwise(""),
+    )
 
-        #add gender names column                       
-    demographics = demographics.withColumn("gender_concept_name", \
-                                           when((demographics.gender_concept_id == 8532), "FEMALE") \
-                                           .when((demographics.gender_concept_id == 8507),"MALE") \
-                                           .otherwise("") \
-                                           )
-    
-    #add ethnicity names column
-    demographics = demographics.withColumn("ethnicity_concept_name", \
-                                           when((demographics.ethnicity_concept_id == 38003563), "Hispanic or Latino") \
-                                           .when((demographics.ethnicity_concept_id == 38003564),"Not Hispanic or Latino") \
-                                           .otherwise("") \
-                                           )
-    
-    #add race names column
-    demographics = demographics.withColumn("race_concept_name", \
-                                           when((demographics.race_concept_id == 8515), "Asian") \
-                                           .when((demographics.race_concept_id == 8516),"Black or African American") \
-                                           .when((demographics.race_concept_id == 8527),"White") \
-                                           .when((demographics.race_concept_id == 8552),"Unknown") \
-                                           .when((demographics.race_concept_id == 8557),"Native Hawaiian or Other Pacific Islander") \
-                                           .when((demographics.race_concept_id == 8657),"American_Indian_or_AL_Native") \
-                                           .otherwise("") \
-                                           )
+    # add ethnicity names column
+    demographics = demographics.withColumn(
+        "ethnicity_concept_name",
+        when((demographics.ethnicity_concept_id == 38003563), "Hispanic or Latino")
+        .when((demographics.ethnicity_concept_id == 38003564), "Not Hispanic or Latino")
+        .otherwise(""),
+    )
+
+    # add race names column
+    demographics = demographics.withColumn(
+        "race_concept_name",
+        when((demographics.race_concept_id == 8515), "Asian")
+        .when((demographics.race_concept_id == 8516), "Black or African American")
+        .when((demographics.race_concept_id == 8527), "White")
+        .when((demographics.race_concept_id == 8552), "Unknown")
+        .when(
+            (demographics.race_concept_id == 8557),
+            "Native Hawaiian or Other Pacific Islander",
+        )
+        .when((demographics.race_concept_id == 8657), "American_Indian_or_AL_Native")
+        .otherwise(""),
+    )
 
     df1 = demographics
-    
+
     from pyspark.ml.feature import StringIndexer
 
     df = df1.select(
@@ -130,10 +137,10 @@ def person_demographics(demographics):
             "person_id",
             "year_of_birth",
             "Asian",
-#            "Asian Indian",
+            #            "Asian Indian",
             "Black or African American",
             "Native Hawaiian or Other Pacific Islander",
-            "White"
+            "White",
         )
     )
 
@@ -163,16 +170,13 @@ def person_demographics(demographics):
 
 
 if __name__ == "__main__":
-
     spark = get_spark_session()
 
     # Load data as spark DF
-    demographics = spark.read.csv(
-        "data/raw_sample/training/person.csv", header=True
-    )
+    demographics = spark.read.csv("data/raw_sample/training/person.csv", header=True)
 
     demographics_df = person_demographics(demographics)
 
     demographics_df.show()
 
-    #demographics.show()
+    # demographics.show()

@@ -1,6 +1,6 @@
 import argparse
-from typing import List, Text, Tuple, Union
 import os
+from typing import List, Text, Tuple, Union
 
 import pandas as pd
 import yaml
@@ -103,9 +103,9 @@ def add_icu(
 ):
     icu_codeset_id = 469361388
 
-    icu_concepts = concept_set_members.filter(F.col("codeset_id") == icu_codeset_id).select(
-        "concept_id", "concept_name"
-    )
+    icu_concepts = concept_set_members.filter(
+        F.col("codeset_id") == icu_codeset_id
+    ).select("concept_id", "concept_name")
 
     procedures_df = procedure_occurrence[
         ["visit_occurrence_id", "procedure_concept_id"]
@@ -177,7 +177,9 @@ def cap_los_outliers(add_los_and_index):
     if CAP_LOS_VALUES:
         df = df.withColumn(
             "los_mod",
-            F.when(F.col("los") > LOS_MAX, 0).when(F.col("los") < 0, 0).otherwise(F.col("los")),
+            F.when(F.col("los") > LOS_MAX, 0)
+            .when(F.col("los") < 0, 0)
+            .otherwise(F.col("los")),
         )
         df = df.drop("los").withColumnRenamed("los_mod", "los")
 
@@ -207,7 +209,8 @@ def before_index_visit_name_counts(ed_ip_op, index_range):
     idx_df = index_range.select("person_id", "index_start_date", "index_end_date")
     df = ed_ip_op.join(idx_df, "person_id", how="left")
     before_df = df.where(
-        F.coalesce(F.col("visit_end_date"), F.col("visit_start_date")) < F.col("index_start_date")
+        F.coalesce(F.col("visit_end_date"), F.col("visit_start_date"))
+        < F.col("index_start_date")
     )
 
     counts_df = before_df.groupBy("person_id").agg(
@@ -399,20 +402,27 @@ def impute_features(final_df):
 def get_input_data(config: dict) -> Tuple[DataFrame]:
     spark = get_spark_session()
     data_path_raw = config["featurize"]["data_path_raw"]
-    
+
     concept_set_members = spark.read.csv(
         config["featurize"]["concept_set_members"], header=True, inferSchema=True
     )
     procedure_occurrence = spark.read.csv(
-        os.path.join(data_path_raw, "procedure_occurrence.csv"), header=True, inferSchema=True
+        os.path.join(data_path_raw, "procedure_occurrence.csv"),
+        header=True,
+        inferSchema=True,
     )
     condition_occurrence = spark.read.csv(
-        os.path.join(data_path_raw, "condition_occurrence.csv"), header=True, inferSchema=True
+        os.path.join(data_path_raw, "condition_occurrence.csv"),
+        header=True,
+        inferSchema=True,
     )
     observation = spark.read.csv(
         os.path.join(data_path_raw, "observation.csv"), header=True, inferSchema=True
     )
-    (long_covid_silver_standard, microvisits_to_macrovisits) = get_micro_macro_long_covid(config)
+    (
+        long_covid_silver_standard,
+        microvisits_to_macrovisits,
+    ) = get_micro_macro_long_covid(config)
     index_range = get_index_range(config)
     return (
         microvisits_to_macrovisits,

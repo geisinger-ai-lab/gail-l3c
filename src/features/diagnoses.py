@@ -69,6 +69,7 @@ condition_type_concept_name
 FROM condition_occurrence_test
 """
 
+
 # COHORT_DIAGNOSIS_CURATED
 def cohort_diagnosis_curated(condition_occurrence, concept_set_members):
     condition_occurrence.createOrReplaceTempView("condition_occurrence")
@@ -121,7 +122,9 @@ def cohort_dx_ct_features(COHORT_DIAGNOSIS_CURATED):
 
 
 def get_diagnoses(condition_occurrence, concept_set_members):
-    cohort_diagnosis = cohort_diagnosis_curated(condition_occurrence, concept_set_members)
+    cohort_diagnosis = cohort_diagnosis_curated(
+        condition_occurrence, concept_set_members
+    )
 
     cohort_dx_features = cohort_dx_ct_features(cohort_diagnosis)
 
@@ -129,7 +132,6 @@ def get_diagnoses(condition_occurrence, concept_set_members):
 
 
 if __name__ == "__main__":
-
     spark = get_spark_session()
 
     # Load data as spark DF
@@ -143,9 +145,13 @@ if __name__ == "__main__":
     condition_occurrence = condition_occurrence.withColumn(
         "condition_concept_id", condition_occurrence.condition_concept_id.cast("int")
     ).withColumn("person_id", condition_occurrence.person_id.cast("int"))
-    index_range = spark.read.csv("data/intermediate/training/index_range.csv", header=True)
+    index_range = spark.read.csv(
+        "data/intermediate/training/index_range.csv", header=True
+    )
 
-    cohort_diagnosis = cohort_diagnosis_curated(condition_occurrence, concept_set_members)
+    cohort_diagnosis = cohort_diagnosis_curated(
+        condition_occurrence, concept_set_members
+    )
 
     cohort_dx_features = cohort_dx_ct_features(cohort_diagnosis)
 
