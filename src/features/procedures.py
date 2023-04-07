@@ -1,92 +1,82 @@
-# Procedure Occurence
 """
-@transform_pandas(
-    Output(rid="ri.foundry.main.dataset.44ffaa66-95d6-4323-817d-4bbf1bf84f12"),
-    procedure_occurrence_test=Input(rid="ri.foundry.main.dataset.88523aaa-75c3-4b55-a79a-ebe27e40ba4f"),
-    procedure_occurrence_train=Input(rid="ri.foundry.main.dataset.9a13eb06-de7d-482b-8f91-fb8c144269e3")
-)
-SELECT
-person_id,
-procedure_occurrence_id,
-procedure_date,
-procedure_datetime,
-quantity,
-provider_id,
-visit_occurrence_id,
-visit_detail_id,
-modifier_source_value,
-data_partner_id,
-procedure_source_value,
-procedure_concept_id,
-procedure_type_concept_id,
-modifier_concept_id,
-procedure_source_concept_id,
-procedure_concept_name,
-procedure_type_concept_name,
-modifier_concept_name,
-procedure_source_concept_name
-FROM procedure_occurrence_train
-UNION ALL 
-SELECT
-person_id,
-procedure_occurrence_id,
-procedure_date,
-procedure_datetime,
-quantity,
-provider_id,
-visit_occurrence_id,
-visit_detail_id,
-modifier_source_value,
-data_partner_id,
-procedure_source_value,
-procedure_concept_id,
-procedure_type_concept_id,
-modifier_concept_id,
-procedure_source_concept_id,
-procedure_concept_name,
-procedure_type_concept_name,
-modifier_concept_name,
-procedure_source_concept_name
-FROM procedure_occurrence_test
+function to load data (concepts, drug_exposure, index_range(derrived))
+
+Implement the sql steps as functions that take in dataframes
+
+"public" function that returns the formatted med features, 
+    with path parameters (e.g. train/test)
+
 """
 
-# Procedure_all
-"""
-SELECT *
-    FROM procedure_occurrence_merge as proce
+import numpy as np
+import pandas as pd
+from pyspark.sql import functions as F
+
+from src.common import get_spark_session, rename_cols
+
+spark = get_spark_session()
+
+
+def get_procedure_all(concept_set_members, procedure_occurrence):
+    """
+    runs SQL on concept set members
+
+    Expects concept_set_members to be a spark dataframe
+
+    Returns a spark dataframe of procedure-related data
+    """
+    concept_set_members.createOrReplaceTempView("concept_set_members")
+    procedure_occurrence.createOrReplaceTempView("procedure_occurrence")
+
+    procedure_sql = """SELECT *
+    FROM procedure_occurrence as proce
     INNER JOIN concept_set_members as proc_concpt
         ON proce.procedure_concept_id = proc_concpt.concept_id
     WHERE proc_concpt.codeset_id  IN ('469361388', '629960249', '260036299', '838273021','415149730', '850548108', '129959605','429864170' )
-    ORDER BY proce.person_id
-"""
+    ORDER BY proce.person_id"""
+    return spark.sql(procedure_sql)
 
-# All_procedure_with_time
-# TODO this should use range_index instead of covid_index_date
-"""
-SELECT pmc.*, f.macrovisit_start_date, 
+
+def all_procedure_with_time(index_range, procedure_all):
+    """
+    Runs Spark-flavor SQL code to connect all the procedures with the relevent time index
+    """
+    index_range.createOrReplaceTempView("index_range")
+    procedure_all.createOrReplaceTempView("procedure_all")
+
+    sql = """SELECT pmc.*, f.macrovisit_start_date, 
 f.macrovisit_end_date,
 f.index_start_date,
 f.index_end_date,
 f.pasc_code_after_four_weeks,
-f.pasc_code_prior_four_weeks,
 f.time_to_pasc,
 case when pmc.procedure_date < f.index_start_date then 'before' 
      when pmc.procedure_date >= f.index_start_date and  pmc.procedure_date <= f.index_end_date then 'during' 
      when pmc.procedure_date > f.index_end_date then 'after' 
     end as feature_time_index
-FROM Procedure_all pmc
-LEFT JOIN covid_index_date f
+FROM procedure_all pmc
+LEFT JOIN index_range f
 ON  pmc.person_id = f.person_id 
 ORDER BY pmc.person_id
 """
+    return spark.sql(sql)
 
 
-def procedure_time_pivoted(All_procedure_with_time):
-    data = All_procedure_with_time
+def procedure_time_grouped(all_procedure_with_time):
+
+    """
+    Procedure grouped, needs to be a PySpark function
+
+    """
+
+    from pyspark.sql.functions import lit
+
+    data = all_procedure_with_time
+
     pivoted_data = (
         data.groupBy(["person_id", "feature_time_index"])
         .pivot("concept_set_name")
-        .agg(F.count("procedure_concept_name").alias("Procedure_count"))
+        .agg(F.count("procedure_concept_id").alias("Procedure_count"))
         .na.fill(0)
     )
 
@@ -104,11 +94,30 @@ def procedure_time_pivoted(All_procedure_with_time):
     for colname, rename in renames.items():
         pivoted_data = pivoted_data.withColumnRenamed(colname, rename)
 
+    all_columns = [
+        "person_id",
+        "feature_time_index",
+        "Blood_transfusion",
+        "Chest_X_ray",
+        "Lungs_CT_scan",
+        "ECG_performed",
+        "ECMO_performed",
+        "Lung_Ultrasound",
+        "Ventilator_used",
+        "Echocardiogram_performed",
+    ]
+    proc_data_feature = pivoted_data.columns
+    missingFeature = list(set(all_columns) - set(proc_data_feature))
+
+    for i in missingFeature:
+        pivoted_data = pivoted_data.withColumn(i, lit(0))
+
     return pivoted_data
 
 
-def Procedure_timeindex_dataset_V1(procedure_time_pivoted):
-    df = procedure_time_pivoted
+def proc_dataset(proc_grouped):
+
+    df = proc_grouped
     df1 = (
         df.groupBy("person_id")
         .pivot("feature_time_index")
@@ -117,11 +126,49 @@ def Procedure_timeindex_dataset_V1(procedure_time_pivoted):
             F.max("Lungs_CT_scan").alias("Lungs_CT_scan"),
             F.max("Chest_X_ray").alias("Chest_X_ray"),
             F.max("Lung_Ultrasound").alias("Lung_Ultrasound"),
-            F.max("ECMO_performed").alias("ECMO_performed"),
             F.max("ECG_performed").alias("ECG_performed"),
-            F.max("Echocardiogram_performed").alias("Echocardiogram_performed"),
+            F.max("ECMO_performed").alias("ECMO_performed"),
             F.max("Blood_transfusion").alias("Blood_transfusion"),
+            F.max("Echocardiogram_performed").alias("Echocardiogram_performed"),
         )
         .na.fill(0)
     )
     return df1
+
+
+def get_procedure_dataset(concept_set_members, procedure_occurrence, index_range):
+    """
+    The "Public" function, meant to be called from the main data preparation script
+
+    Returns formatted procedure features
+    """
+
+    procedure_all = get_procedure_all(concept_set_members, procedure_occurrence)
+    procedure_with_time = all_procedure_with_time(index_range, procedure_all)
+    procedure_grouped = procedure_time_grouped(procedure_with_time)
+    procedure_df = proc_dataset(procedure_grouped)
+
+    return procedure_df
+
+
+if __name__ == "__main__":
+
+    spark = get_spark_session()
+
+    # Load data as spark DF
+    concept_set_path = "data/raw_sample/concept_set_members.csv"
+    concept_set_members = spark.read.csv(concept_set_path, header=True)
+
+    procedure_occurrence = spark.read.csv(
+        "data/raw_sample/training/procedure_occurrence.csv",
+        header=True,
+        inferSchema=True,
+    )
+    index_range = spark.read.csv(
+        "data/intermediate/training/index_range.csv", header=True, inferSchema=True
+    )
+
+    # Run the procedure data ETL
+    procedure_df = get_procedure_dataset(concept_set_members, procedure_occurrence, index_range)
+
+    procedure_df.show()

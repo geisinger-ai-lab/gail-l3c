@@ -1,0 +1,18 @@
+common:
+  log_level: DEBUG
+featurize:
+  data_path_raw: 'data/raw_sample/testing'
+  data_path_intermediate: 'data/intermediate/testing'
+  data_path_featurized: 'data/featurized/testing'
+  concept_set_members: 'data/raw_sample/concept_set_members.csv'
+  random_state: 16
+train:
+  model_path: 'models/'
+  model_name: 'demo.json'
+  random_seed: 16
+infer:
+  data_path: 'data/featurized/testing'
+  data_files:
+    - 'featurized_data.csv'
+  predictions_path: 'data/predictions/testing'
+  threshold: 0.5
