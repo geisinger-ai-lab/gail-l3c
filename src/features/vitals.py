@@ -16,7 +16,6 @@ spark = get_spark_session()
 
 
 def get_vitals_concepts(concept_set_members):
-
     concept_set_members.createOrReplaceTempView("concept_set_members")
 
     sql = """select *, 'spo2' as feature_name, 'percent' as preferred_unit_concept_name
@@ -44,7 +43,6 @@ where csm.codeset_id = 510707388 -- Respiratory rate (LG33055-1 and SNOMED)
 
 
 def filter_vitals(vitals_concepts, index_range, measurement):
-
     vitals_concepts.createOrReplaceTempView("vitals_concepts")
     index_range.createOrReplaceTempView("index_range")
     measurement.createOrReplaceTempView("measurement")
@@ -85,7 +83,6 @@ where
 
 
 def group_vitals(vitals_filtered):
-
     vitals_filtered.createOrReplaceTempView("vitals_filtered")
 
     sql = """select 
@@ -150,7 +147,6 @@ def get_vitals_dataset(concept_set_members, measurement, index_range):
 
 
 if __name__ == "__main__":
-
     # Load data as spark DF
     concept_set_path = "data/raw_sample/concept_set_members.csv"
     concept_set_members = spark.read.csv(

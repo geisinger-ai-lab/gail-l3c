@@ -1,10 +1,64 @@
+import argparse
+from typing import List, Text, Tuple, Union
+
 import pandas as pd
+import yaml
+from pyspark.sql import DataFrame, Window
+from pyspark.sql import functions as F
 from pyspark.sql import types as T
 
 from src.common import get_spark_session
 
+## Utilization
+CAP_LOS_VALUES = False
+LOS_MAX = 365
 
-def get_utilization():
+
+def create_utilization(config: dict):
+    (
+        microvisits_to_macrovisits,
+        concept_set_members,
+        procedure_occurrence,
+        condition_occurrence,
+        observation,
+        long_covid_silver_standard,
+        index_range,
+    ) = get_input_data(config)
+
+    utilization = add_icu(
+        microvisits_to_macrovisits,
+        concept_set_members,
+        procedure_occurrence,
+        condition_occurrence,
+        observation,
+    )
+
+    utilization = add_los_covid_index(utilization, long_covid_silver_standard)
+
+    utilization = cap_los_outliers(utilization)
+
+    ed_ip_op = add_ed_ip_op(utilization)
+
+    index_concept_names = index_visit_concept_name(index_range, ed_ip_op)
+
+    with_los = los_stats(ed_ip_op)
+
+    with_before = before_index_visit_name_counts(ed_ip_op, index_range)
+
+    with_during = during_index_visit_name_counts(ed_ip_op, index_range)
+
+    with_after = after_index_visit_name_counts(ed_ip_op, index_range)
+
+    final_util = add_final_columns(
+        index_concept_names, with_los, with_before, with_during, with_after
+    )
+
+    imputed_final = impute_features(final_util)
+
+    imputed_final.write.parquet()
+
+
+def get_utilization(config: dict) -> DataFrame:
     spark = get_spark_session()
 
     schema = T.StructType(
@@ -31,15 +85,46 @@ def get_utilization():
     return spark.createDataFrame(data, schema=schema)
 
 
+def with_concept_name(
+    df, domain_df, icu_concepts, concept_id_column, concept_name_column
+):
+    df = df.join(domain_df, "visit_occurrence_id", how="left")
+
+    df = df.join(
+        icu_concepts, df[concept_id_column] == icu_concepts["concept_id"], how="left"
+    )
+
+    df = (
+        df.withColumnRenamed("concept_name", concept_name_column)
+        .drop("concept_id")
+        .distinct()
+    )
+
+    df = df.withColumn(
+        "rn",
+        F.row_number().over(
+            Window.partitionBy("visit_occurrence_id").orderBy(
+                F.desc(concept_name_column)
+            )
+        ),
+    )
+
+    df = df.filter(df["rn"] == 1)
+
+    df = df.drop("rn")
+
+    return df
+
+
 # Add_ICU (d5691458-1e67-4887-a68f-4cfbd4753295): v1
 
 
 def add_icu(
-    microvisits_to_macrovisits_merge,
+    microvisits_to_macrovisits,
     concept_set_members,
-    procedure_occurrence_merge,
-    condition_occurrence_merge,
-    observation_merge,
+    procedure_occurrence,
+    condition_occurrence,
+    observation,
 ):
     icu_codeset_id = 469361388
 
@@ -47,17 +132,13 @@ def add_icu(
         F.col("codeset_id") == icu_codeset_id
     ).select("concept_id", "concept_name")
 
-    procedures_df = procedure_occurrence_merge[
+    procedures_df = procedure_occurrence[
         ["visit_occurrence_id", "procedure_concept_id"]
     ]
-    condition_df = condition_occurrence_merge[
-        ["visit_occurrence_id", "condition_concept_id"]
-    ]
-    observation_df = observation_merge[
-        ["visit_occurrence_id", "observation_concept_id"]
-    ]
+    condition_df = condition_occurrence[["visit_occurrence_id", "condition_concept_id"]]
+    observation_df = observation[["visit_occurrence_id", "observation_concept_id"]]
 
-    df = microvisits_to_macrovisits_merge
+    df = microvisits_to_macrovisits
 
     df = with_concept_name(
         df,
@@ -92,23 +173,33 @@ def add_icu(
     return df
 
 
-# -- Add LOS and COVID Index (016fc630-b7c6-405e-b4a8-7c5bbb03dfef): v1
-"""SELECT icu.*, s.covid_index, 
-coalesce(icu.macrovisit_start_date, icu.visit_start_date) stay_start_date,
-coalesce(icu.macrovisit_end_date, icu.visit_end_date) stay_end_date, 
-case when 
-coalesce(icu.macrovisit_end_date, icu.visit_end_date) is not null then
-datediff(coalesce(icu.macrovisit_end_date, icu.visit_end_date), coalesce(icu.macrovisit_start_date, icu.visit_start_date)) 
-else 0 end los
-FROM add_icu icu 
-left join Long_COVID_Silver_Standard s on icu.person_id = s.person_id
-"""
+def add_los_covid_index(
+    add_icu: DataFrame, long_covid_silver_standard: DataFrame
+) -> DataFrame:
+    # -- Add LOS and COVID Index (016fc630-b7c6-405e-b4a8-7c5bbb03dfef): v1
+    spark = get_spark_session()
+
+    long_covid_silver_standard.createOrReplaceTempView("long_covid_silver_standard")
+    add_icu.createOrReplaceTempView("add_icu")
+
+    query = """SELECT icu.*, s.covid_index, 
+    coalesce(icu.macrovisit_start_date, icu.visit_start_date) stay_start_date,
+    coalesce(icu.macrovisit_end_date, icu.visit_end_date) stay_end_date, 
+    case when 
+    coalesce(icu.macrovisit_end_date, icu.visit_end_date) is not null then
+    datediff(coalesce(icu.macrovisit_end_date, icu.visit_end_date), coalesce(icu.macrovisit_start_date, icu.visit_start_date)) 
+    else 0 end los
+    FROM add_icu icu 
+    left join Long_COVID_Silver_Standard s on icu.person_id = s.person_id
+    """
+    los_covid_index = spark.sql(query)
+    return los_covid_index
 
 
-def coerce_los_outliers(add_los_and_index):
+def cap_los_outliers(add_los_and_index):
     df = add_los_and_index
 
-    if COERCE_LOS_OUTLIERS:
+    if CAP_LOS_VALUES:
         df = df.withColumn(
             "los_mod",
             F.when(F.col("los") > LOS_MAX, 0)
@@ -120,21 +211,28 @@ def coerce_los_outliers(add_los_and_index):
     return df
 
 
-"""SELECT *, 
-case when visit_concept_name like '%Emergency%' then 1 else 0 end is_ed,
-case when visit_concept_name like '%Inpatient%' then 1 else 0 end is_ip,
-case when visit_concept_name like '%Tele%' then 1 else 0 end is_tele,
-case when visit_concept_name not like '%Emergency%' 
-    and visit_concept_name not like '%Inpatient%' 
-    and visit_concept_name not like '%Tele%' then 1 else 0 end is_op
-FROM coerce_los_outliers
-"""
+def add_ed_ip_op(los: DataFrame) -> DataFrame:
+    spark = get_spark_session()
+
+    los.createOrReplaceTempView("los")
+
+    query = """SELECT *, 
+    case when visit_concept_name like '%Emergency%' then 1 else 0 end is_ed,
+    case when visit_concept_name like '%Inpatient%' then 1 else 0 end is_ip,
+    case when visit_concept_name like '%Tele%' then 1 else 0 end is_tele,
+    case when visit_concept_name not like '%Emergency%' 
+        and visit_concept_name not like '%Inpatient%' 
+        and visit_concept_name not like '%Tele%' then 1 else 0 end is_op
+    FROM los
+    """
+
+    df = spark.sql(query)
+    return df
 
 
-def before_index_visit_name_counts_copied(add_ed_ip_op_copied, index_range):
+def before_index_visit_name_counts(ed_ip_op, index_range):
     idx_df = index_range.select("person_id", "index_start_date", "index_end_date")
-    add_ed_ip_op = add_ed_ip_op_copied
-    df = add_ed_ip_op.join(idx_df, "person_id", how="left")
+    df = ed_ip_op.join(idx_df, "person_id", how="left")
     before_df = df.where(
         F.coalesce(F.col("visit_end_date"), F.col("visit_start_date"))
         < F.col("index_start_date")
@@ -150,10 +248,9 @@ def before_index_visit_name_counts_copied(add_ed_ip_op_copied, index_range):
     return counts_df
 
 
-def during_index_visit_name_counts_copied(add_ed_ip_op_copied, index_range):
+def during_index_visit_name_counts(ed_ip_op, index_range):
     idx_df = index_range.select("person_id", "index_start_date", "index_end_date")
-    add_ed_ip_op = add_ed_ip_op_copied
-    df = add_ed_ip_op.join(idx_df, "person_id", how="left")
+    df = ed_ip_op.join(idx_df, "person_id", how="left")
 
     during_df = df.where(
         (F.col("visit_start_date") >= F.col("index_start_date"))
@@ -173,10 +270,9 @@ def during_index_visit_name_counts_copied(add_ed_ip_op_copied, index_range):
     return counts_df
 
 
-def after_index_visit_name_counts_copied(add_ed_ip_op_copied, index_range):
+def after_index_visit_name_counts(ed_ip_op, index_range):
     idx_df = index_range.select("person_id", "index_start_date", "index_end_date")
-    add_ed_ip_op = add_ed_ip_op_copied
-    df = add_ed_ip_op.join(idx_df, "person_id", how="left")
+    df = ed_ip_op.join(idx_df, "person_id", how="left")
     during_df = df.where(F.col("visit_start_date") > F.col("index_end_date"))
 
     counts_df = during_df.groupBy("person_id").agg(
@@ -189,73 +285,124 @@ def after_index_visit_name_counts_copied(add_ed_ip_op_copied, index_range):
     return counts_df
 
 
-# index_visit_concept_name_copied
-"""select 
-c.person_id, 
-case when any(c.visit_concept_name like '%Emergency%') then 1 else 0 end is_index_ed,
-case when any(c.visit_concept_name like '%Inpatient%') then 1 else 0 end is_index_ip,
-case when any(c.visit_concept_name like '%Tele%') then 1 else 0 end is_index_tele,
-case when (any(c.visit_concept_name not like '%Emergency%')
-        and any(c.visit_concept_name not like '%Inpatient%')
-        and any(c.visit_concept_name not like '%Tele%')) then 1 else 0 end is_index_op
-from
-(SELECT distinct i.person_id, 
-v.visit_concept_name
-FROM index_range i
-left join add_ed_ip_op_copied v on i.person_id = v.person_id) c
-group by c.person_id
+def index_visit_concept_name(index_range: DataFrame, ed_ip_op: DataFrame) -> DataFrame:
+    spark = get_spark_session()
 
--- select * from 
--- (SELECT distinct i.person_id, 
--- v.visit_concept_name, 
--- row_number() over (partition by i.person_id order by v.visit_concept_name desc) rn
--- FROM index_range i
--- left join add_ed_ip_op_copied v on i.person_id = v.person_id) c 
--- where rn = 1"""
+    index_range.createOrReplaceTempView("index_range")
+    ed_ip_op.createOrReplaceTempView("ed_ip_op")
 
-# los_stats_copied
-"""select overall.person_id, overall.avg_los, 
-case when icu.avg_icu_los is not null then icu.avg_icu_los else 0 end avg_icu_los from 
-(select person_id, avg(los) avg_los from 
-(select distinct person_id, stay_start_date, stay_end_date, los from add_ed_ip_op_copied ) o 
-group by person_id) overall 
-left join 
-(select person_id, avg(los) avg_icu_los from 
-(select distinct person_id, stay_start_date, stay_end_date, los from add_ed_ip_op_copied 
-where is_icu = 1) o 
-group by person_id) icu
-on icu.person_id = overall.person_id
-"""
+    query = """select 
+    c.person_id, 
+    case when any(c.visit_concept_name like '%Emergency%') then 1 else 0 end is_index_ed,
+    case when any(c.visit_concept_name like '%Inpatient%') then 1 else 0 end is_index_ip,
+    case when any(c.visit_concept_name like '%Tele%') then 1 else 0 end is_index_tele,
+    case when (any(c.visit_concept_name not like '%Emergency%')
+            and any(c.visit_concept_name not like '%Inpatient%')
+            and any(c.visit_concept_name not like '%Tele%')) then 1 else 0 end is_index_op
+    from
+    (SELECT distinct i.person_id, 
+    v.visit_concept_name
+    FROM index_range i
+    left join ed_ip_op v on i.person_id = v.person_id) c
+    group by c.person_id"""
 
-# utilization_v2
-"""
-SELECT 
-i.person_id,
-i.is_index_ed,
-i.is_index_ip,
-i.is_index_tele,
-i.is_index_op,
-l.avg_los,
-l.avg_icu_los,
-b.before_ed_cnt,
-b.before_ip_cnt,
-b.before_op_cnt,
-d.during_ed_cnt,
-d.during_ip_cnt,
-d.during_op_cnt,
-a.after_ed_cnt,
-a.after_ip_cnt,
-a.after_op_cnt
-FROM index_visit_concept_name_copied i
-left join los_stats_copied l on i.person_id = l.person_id
-left join before_index_visit_name_counts_copied b on i.person_id = b.person_id
-left join during_index_visit_name_counts_copied d on i.person_id = d.person_id
-left join after_index_visit_name_counts_copied a on i.person_id = a.person_id
-"""
+    return spark.sql(query)
 
 
-def utilization_updated_columns(utilization_v2):
-    df = utilization_v2
+def los_stats(ed_ip_op: DataFrame) -> DataFrame:
+    spark = get_spark_session()
+
+    ed_ip_op.createOrReplaceTempView("ed_ip_op")
+
+    query = """
+    SELECT
+        overall.person_id,
+        overall.avg_los,
+        CASE
+            WHEN icu.avg_icu_los IS NOT NULL THEN icu.avg_icu_los
+            ELSE 0
+        END avg_icu_los
+    FROM (SELECT
+            person_id,
+            AVG(los) avg_los
+        FROM (SELECT DISTINCT
+                person_id,
+                stay_start_date,
+                stay_end_date,
+                los
+            FROM ed_ip_op) o
+        GROUP BY person_id) overall
+    LEFT JOIN (SELECT
+            person_id,
+            AVG(los) avg_icu_los
+        FROM (SELECT DISTINCT
+                person_id,
+                stay_start_date,
+                stay_end_date,
+                los
+            FROM ed_ip_op
+            WHERE is_icu = 1) o
+        GROUP BY person_id) icu
+        ON icu.person_id = overall.person_id
+    """
+    return spark.sql(query)
+
+
+def add_final_columns(
+    index_visit_concept_name,
+    los_stats,
+    before_index_visit_name_counts,
+    during_index_visit_name_counts,
+    after_index_visit_name_counts,
+):
+    spark = get_spark_session()
+
+    index_visit_concept_name.createOrReplaceTempView("index_visit_concept_name")
+    los_stats.createOrReplaceTempView("los_stats")
+    before_index_visit_name_counts.createOrReplaceTempView(
+        "before_index_visit_name_counts"
+    )
+    during_index_visit_name_counts.createOrReplaceTempView(
+        "during_index_visit_name_counts"
+    )
+    after_index_visit_name_counts.createOrReplaceTempView(
+        "after_index_visit_name_counts"
+    )
+
+    query = """
+    SELECT
+        i.person_id,
+        i.is_index_ed,
+        i.is_index_ip,
+        i.is_index_tele,
+        i.is_index_op,
+        l.avg_los,
+        l.avg_icu_los,
+        b.before_ed_cnt,
+        b.before_ip_cnt,
+        b.before_op_cnt,
+        d.during_ed_cnt,
+        d.during_ip_cnt,
+        d.during_op_cnt,
+        a.after_ed_cnt,
+        a.after_ip_cnt,
+        a.after_op_cnt
+    FROM index_visit_concept_name i
+    LEFT JOIN los_stats l
+        ON i.person_id = l.person_id
+    LEFT JOIN before_index_visit_name_counts b
+        ON i.person_id = b.person_id
+    LEFT JOIN during_index_visit_name_counts d
+        ON i.person_id = d.person_id
+    LEFT JOIN after_index_visit_name_counts a
+        ON i.person_id = a.person_id
+    """
+
+    return spark.sql(query)
+
+
+def impute_features(final_df):
+    df = final_df
     subset_fill_0 = [
         "is_index_ed",
         "is_index_ip",
@@ -275,3 +422,49 @@ def utilization_updated_columns(utilization_v2):
     df = df.fillna(0, subset=subset_fill_0)
     df = df.fillna(-1, subset=subset_fill_neg_1)
     return df
+
+
+def get_input_data(config: dict) -> Tuple[DataFrame]:
+    spark = get_spark_session()
+    microvisits_to_macrovisits = spark.read.csv(
+        config["featurize"]["micro_to_macro_path"], header=True, inferSchema=True
+    )
+    concept_set_members = spark.read.csv(
+        config["featurize"]["concept_set_members"], header=True, inferSchema=True
+    )
+    procedure_occurrence = spark.read.csv(
+        config["featurize"]["procedure_occurrence"], header=True, inferSchema=True
+    )
+    condition_occurrence = spark.read.csv(
+        config["featurize"]["condition_occurrence"], header=True, inferSchema=True
+    )
+    observation = spark.read.csv(
+        config["featurize"]["observation"], header=True, inferSchema=True
+    )
+    long_covid_silver_standard = spark.read.csv(
+        config["featurize"]["long_covid_path"], header=True, inferSchema=True
+    )
+    # index_range_path
+    index_range = spark.read.parquet(config["featurize"]["index_range_path"])
+    return (
+        microvisits_to_macrovisits,
+        concept_set_members,
+        procedure_occurrence,
+        condition_occurrence,
+        observation,
+        long_covid_silver_standard,
+        index_range,
+    )
+
+
+if __name__ == "__main__":
+    args_parser = argparse.ArgumentParser()
+    args_parser.add_argument("--config", dest="config", required=True)
+    args = args_parser.parse_args()
+
+    config_path = args.config
+
+    with open(config_path) as conf_file:
+        config = yaml.safe_load(conf_file)
+
+    create_utilization(config)

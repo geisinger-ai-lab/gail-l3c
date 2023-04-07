@@ -122,7 +122,6 @@ where mc.feature_name is not null
 
 
 def group_meds(meds_filtered):
-
     meds_filtered.createOrReplaceTempView("meds_filtered")
 
     sql = """select 
@@ -201,7 +200,6 @@ def get_meds_dataset(concept_set_members, drug_exposure, index_range):
 
 
 if __name__ == "__main__":
-
     spark = get_spark_session()
 
     # Load data as spark DF
