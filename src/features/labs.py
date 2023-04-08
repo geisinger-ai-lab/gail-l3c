@@ -1,79 +1,62 @@
+"""
+Functions to gather measurements and aggregate the values over three timelines with respect to the COVID-19 diagnosis (after, before, during).
+"""
+## Foundational libraries: 
 from itertools import chain
+import numpy as np 
+import pandas as pd
+from src.common import get_spark_session, get_index_range
 
+## Pyspark associated libraries:
+from pyspark.sql import functions as F
 from pyspark.sql.functions import col, create_map, lit, when
+from pyspark.sql.types import NullType
 
+###############################################
+## HEIGHT AND WEIGHT MEASUREMENTS:
+###############################################
 # COHORT_WT_HT_CURATED
-"""
-SELECT LABS.person_id, 
-    LABS.measurement_date, LABS.measurement_concept_name, LABS.measurement_source_concept_name,
-    LABS.value_as_number, LABS.unit_concept_name, LABS.range_low, LABS.range_high
-    FROM measurement_merge AS LABS
-    RIGHT JOIN concept_set_members AS LOOKUP
-        ON LABS.measurement_concept_id = LOOKUP.concept_id
-    WHERE LOOKUP.codeset_id IN ( 
-                                 854721978, --BodyWeight
-                                 186671483 --Height
-                                 ) 
-        AND LABS.person_id IS NOT NULL
-        AND LABS.value_as_number IS NOT NULL
-    ORDER BY LABS.person_id, LABS.measurement_date
-"""
+def get_height_weight_measurements(measurement, concept_set_members):
+    ## Creating a tempview:
+    measurement.createOrReplaceTempView("measurement")
+    concept_set_members.createOrReplaceTempView("concept_set_members")
 
-# COHORT_CBC_PANEL_CURATED
-"""
-SELECT LABS.person_id, 
-    LABS.measurement_date, LABS.measurement_concept_name, LABS.measurement_source_concept_name,
-    LABS.value_as_number, LABS.unit_concept_name, LABS.range_low, LABS.range_high
-    FROM measurement_merge AS LABS
-    RIGHT JOIN concept_set_members AS LOOKUP
-        ON LABS.measurement_concept_id = LOOKUP.concept_id
-    WHERE LOOKUP.codeset_id IN ( 985622897 ) -- Complete Blood Panel  
-        AND LABS.person_id IS NOT NULL
-        AND LABS.value_as_number IS NOT NULL
-    ORDER BY LABS.person_id, LABS.measurement_date
-"""
+    ## Extracting height and weight measurements using OMOP concept IDs:
+    # TODO: Resolve the problem of missing measurement_concept_name: 
+    expr = """
+            SELECT LABS.person_id, 
+                LABS.measurement_date, 
+                -- LABS.measurement_concept_name, 
+                -- LABS.measurement_source_concept_name,
+                LOOKUP.concept_name AS measurement_concept_name,
+                LABS.value_as_number, 
+                -- LABS.unit_concept_name, 
+                LABS.unit_concept_id,
+                LABS.range_low, LABS.range_high
+                FROM measurement AS LABS
+                RIGHT JOIN concept_set_members AS LOOKUP
+                    ON LABS.measurement_concept_id = LOOKUP.concept_id 
+                WHERE LOOKUP.codeset_id IN ( 
+                                            854721978, --BodyWeight
+                                            186671483 --Height
+                                            ) 
+                    AND LABS.person_id IS NOT NULL
+                    AND LABS.value_as_number IS NOT NULL
+                ORDER BY LABS.person_id, LABS.measurement_date
+            """
+    df = spark.sql(expr)
 
-# COHORT_CMP_CURATED
-"""
-SELECT LABS.person_id, 
-    LABS.measurement_date, LABS.measurement_concept_name, LABS.measurement_source_concept_name,
-    LABS.value_as_number, LABS.unit_concept_name, LABS.range_low, LABS.range_high
-    FROM measurement_merge AS LABS
-    RIGHT JOIN concept_set_members AS LOOKUP
-        ON LABS.measurement_concept_id = LOOKUP.concept_id
-    WHERE LOOKUP.codeset_id IN ( 212998332, --Comprehensive metabolic Profile
-                                 104464584 --Albumin
-                                 ) 
-        AND LABS.person_id IS NOT NULL
-        AND LABS.value_as_number IS NOT NULL
-    ORDER BY LABS.person_id, LABS.measurement_date
-"""
+    ## TODO: Placeholder to resolve the problem of missing unit_concept_name: 
+    if 'unit_concept_name' not in df.columns:
+        df = df.withColumn('unit_concept_name', lit(None).cast('string') )
+    return df
 
-# COHORT_IMMUNOASSAY_CURATED
-"""SELECT LABS.person_id, 
-    LABS.measurement_date, LABS.measurement_concept_name, LABS.measurement_source_concept_name,
-    LABS.value_as_number, LABS.unit_concept_name, LABS.range_low, LABS.range_high
-    FROM measurement_merge AS LABS
-    RIGHT JOIN concept_set_members AS LOOKUP
-        ON LABS.measurement_concept_id = LOOKUP.concept_id
-    WHERE LOOKUP.codeset_id IN ( 459475527 ) -- ImmunoAssay 
-        AND LABS.person_id IS NOT NULL
-        AND LABS.value_as_number IS NOT NULL
-    ORDER BY LABS.person_id, LABS.measurement_date
-
-"""
-
-
-@transform_pandas(
-    Output(rid="ri.foundry.main.dataset.489b4135-2d60-45c7-ac58-b2d6b161e4b3"),
-    COHORT_WT_HT_CURATED=Input(
-        rid="ri.foundry.main.dataset.2eeb4595-97b9-45a3-9430-6b76e738a3e0"
-    ),
-)
 def COHORT_WT_HT_PIVOT(COHORT_WT_HT_CURATED):
+    """
+    Standardising and Pivoting the weight and height information for the cohort by the encounter. 
+    """
     ## Spark dataframe for the comprehensive metabolic panel:
     df = COHORT_WT_HT_CURATED
-
     ## Renaming the concept names to map to columns for pivoting the table:
     columns = {
         "Body weight": "body_weight",
@@ -92,9 +75,7 @@ def COHORT_WT_HT_PIVOT(COHORT_WT_HT_CURATED):
         "Body height": "body_height",
         "Body height --standing": "body_height",
     }
-
     df2 = df.replace(to_replace=columns, subset=["measurement_concept_name"])
-
     ## Pivoting Table:
     pivotDF = (
         df2.groupBy(["person_id", "measurement_date"])
@@ -104,14 +85,25 @@ def COHORT_WT_HT_PIVOT(COHORT_WT_HT_CURATED):
             F.first("unit_concept_name").alias("unit"),
         )
     )
+    ## TODO: Fail safe added to ensure the minimum required columns exist:
+    if 'body_height_value' not in pivotDF.columns:
+        pivotDF = pivotDF.withColumn('body_height_value', lit(None).cast('string') )
+    if 'body_weight_value' not in pivotDF.columns:
+        pivotDF = pivotDF.withColumn('body_weight_value', lit(None).cast('string') )
+    if 'body_height_unit' not in pivotDF.columns:
+        pivotDF = pivotDF.withColumn('body_height_unit', lit(None).cast('string') )
+    if 'body_weight_unit' not in pivotDF.columns:
+        pivotDF = pivotDF.withColumn('body_weight_unit', lit(None).cast('string') )
 
     return pivotDF
 
-
 def HT_WT_standard(COHORT_WT_HT_PIVOT):
+    """
+    Conversion of values to standardize the measurements associated with different units. 
+    """
     ## Spark dataframe for HT WT:
     df = COHORT_WT_HT_PIVOT
-
+    ## Standardizing height values (standard unit=centimeter):
     df3 = df.withColumn(
         "body_height_value",
         when(col("body_height_unit") == "inch (US)", col("body_height_value") * 2.54)
@@ -127,7 +119,7 @@ def HT_WT_standard(COHORT_WT_HT_PIVOT):
         .when(col("body_height_unit") == "milliliter", None)
         .otherwise(col("body_height_value")),
     )
-
+    ## Standardised Height Unit (standard unit=centimeter):
     df3 = df3.withColumn(
         "body_height_unit",
         when(col("body_height_unit") == "inch (US)", "centimeter")
@@ -139,7 +131,7 @@ def HT_WT_standard(COHORT_WT_HT_PIVOT):
         .when(col("body_height_unit") == "milliliter", None)
         .otherwise(col("body_height_unit")),
     )
-
+    ## Standardised Weight Values (standard unit=pound (US)):
     df3 = df3.withColumn(
         "body_weight_value",
         when(col("body_weight_unit") == "kilogram", col("body_weight_value") * 2.20462)
@@ -157,7 +149,7 @@ def HT_WT_standard(COHORT_WT_HT_PIVOT):
         .when(col("body_weight_unit").isNull(), None)
         .otherwise(col("body_weight_value")),
     )
-
+    ## Standardised Weight Unit (standard unit=pound (US)):
     df3 = df3.withColumn(
         "body_weight_unit",
         when(col("body_weight_unit") == "kilogram", "pound (US)")
@@ -171,7 +163,7 @@ def HT_WT_standard(COHORT_WT_HT_PIVOT):
         .when(col("body_weight_unit") == "milliliter", None)
         .otherwise(col("body_weight_unit")),
     )
-
+    ## Dropping unrequired columns:
     df3 = df3.drop(
         "body_weight_msc_value",
         "body_weight_msc_unit",
@@ -181,6 +173,40 @@ def HT_WT_standard(COHORT_WT_HT_PIVOT):
 
     return df3
 
+###############################################
+## COMPLETE BLOOD COUNT MEASUREMENTS:
+###############################################
+def get_cbc_measurements(measurement, concept_set_members):
+    ## Creating a tempview:
+    measurement.createOrReplaceTempView("measurement")
+    concept_set_members.createOrReplaceTempView("concept_set_members")
+
+    ## Extracting CBC measurements using OMOP concept IDs:
+    # TODO: Resolve the problem of missing measurement_concept_name: 
+    expr = """
+            SELECT LABS.person_id, 
+                LABS.measurement_date, 
+                -- LABS.measurement_concept_name, 
+                -- LABS.measurement_source_concept_name,
+                LOOKUP.concept_name AS measurement_concept_name,
+                LABS.value_as_number, 
+                -- LABS.unit_concept_name, 
+                LABS.unit_concept_id,
+                LABS.range_low, LABS.range_high
+                FROM measurement AS LABS
+                RIGHT JOIN concept_set_members AS LOOKUP
+                    ON LABS.measurement_concept_id = LOOKUP.concept_id
+                WHERE LOOKUP.codeset_id IN ( 985622897 ) -- Complete Blood Panel  
+                    AND LABS.person_id IS NOT NULL
+                    AND LABS.value_as_number IS NOT NULL
+                ORDER BY LABS.person_id, LABS.measurement_date
+            """
+    df = spark.sql(expr)
+
+    ## TODO: Placeholder to resolve the problem of missing unit_concept_name: 
+    if 'unit_concept_name' not in df.columns:
+        df = df.withColumn('unit_concept_name', lit(None).cast('string') )
+    return df
 
 def COHORT_CBC_VALUES_PIVOT(COHORT_CBC_PANEL_CURATED):
     ## Spark dataframe for the comprehensive metabolic panel:
@@ -231,6 +257,11 @@ def COHORT_CBC_VALUES_PIVOT(COHORT_CBC_PANEL_CURATED):
             F.first("unit_concept_name").alias("unit"),
         )
     )
+
+    for feature in list( set(val for val in columns.values()) ):
+        ## Add Feature value & unit column to the DF if doesn't exist:
+        pivotDF = pivotDF.withColumn(f'{feature}_value', lit(None).cast('string') )\
+                    .withColumn(f'{feature}_unit', lit(None).cast('string') )
 
     ## Standardising Units:
     pivotDF = pivotDF.na.fill("gram per deciliter", subset=["hgb_unit", "mchc_unit"])
@@ -447,8 +478,44 @@ def COHORT_CBC_VALUES_PIVOT(COHORT_CBC_PANEL_CURATED):
         ),
     )
 
+    ## Identify the missing features in the df.columns:
     return pivotDF
 
+###############################################
+## COMPREHENSIVE METABOLIC PROFILE MEASUREMENTS:
+###############################################
+def get_cmp_measurements(measurement, concept_set_members):
+    ## Creating a tempview:
+    measurement.createOrReplaceTempView("measurement")
+    concept_set_members.createOrReplaceTempView("concept_set_members")
+    ## Extracting CBC measurements using OMOP concept IDs:
+    # TODO: Resolve the problem of missing measurement_concept_name: 
+    expr = """
+            SELECT LABS.person_id, 
+                LABS.measurement_date, 
+                -- LABS.measurement_concept_name, 
+                -- LABS.measurement_source_concept_name,
+                LOOKUP.concept_name AS measurement_concept_name,
+                LABS.value_as_number, 
+                -- LABS.unit_concept_name, 
+                LABS.unit_concept_id,
+                LABS.range_low, LABS.range_high
+                FROM measurement AS LABS
+                RIGHT JOIN concept_set_members AS LOOKUP
+                    ON LABS.measurement_concept_id = LOOKUP.concept_id
+                WHERE LOOKUP.codeset_id IN ( 212998332, --Comprehensive metabolic Profile
+                                            104464584 --Albumin
+                                            ) 
+                    AND LABS.person_id IS NOT NULL
+                    AND LABS.value_as_number IS NOT NULL
+                ORDER BY LABS.person_id, LABS.measurement_date
+            """
+    df = spark.sql(expr)
+
+    ## TODO: Placeholder to resolve the problem of missing unit_concept_name: 
+    if 'unit_concept_name' not in df.columns:
+        df = df.withColumn('unit_concept_name', lit(None).cast('string') )
+    return df
 
 def COHORT_CMP_VALUES_PIVOT(COHORT_CMP_CURATED):
     ## Spark dataframe for the comprehensive metabolic panel:
@@ -496,6 +563,11 @@ def COHORT_CMP_VALUES_PIVOT(COHORT_CMP_CURATED):
             F.first("unit_concept_name").alias("unit"),
         )
     )
+
+    for feature in list( set(val for val in columns.values()) ):
+        ## Add Feature value & unit column to the DF if doesn't exist:
+        pivotDF = pivotDF.withColumn(f'{feature}_value', lit(None).cast('string') )\
+                    .withColumn(f'{feature}_unit', lit(None).cast('string') )
 
     ## Standardising Units:
     pivotDF = pivotDF.na.fill(
@@ -662,6 +734,23 @@ def COHORT_CMP_VALUES_PIVOT(COHORT_CMP_CURATED):
 
     return pivotDF
 
+###############################################
+## IMMUNOASSAY MEASUREMENTS:
+###############################################
+"""
+# COHORT_IMMUNOASSAY_CURATED
+    """
+    #SELECT LABS.person_id, 
+    #LABS.measurement_date, LABS.measurement_concept_name, LABS.measurement_source_concept_name,
+    #LABS.value_as_number, LABS.unit_concept_name, LABS.range_low, LABS.range_high
+    #FROM measurement_merge AS LABS
+    #RIGHT JOIN concept_set_members AS LOOKUP
+    #    ON LABS.measurement_concept_id = LOOKUP.concept_id
+    #WHERE LOOKUP.codeset_id IN ( 459475527 ) -- ImmunoAssay 
+    #    AND LABS.person_id IS NOT NULL
+    #    AND LABS.value_as_number IS NOT NULL
+    #ORDER BY LABS.person_id, LABS.measurement_date
+"""
 
 def COHORT_IMMUNOGLOBIN_PIVOT(COHORT_IMMUNOASSAY_CURATED):
     ## Spark dataframe for the comprehensive metabolic panel:
@@ -701,11 +790,9 @@ def COHORT_IMMUNOGLOBIN_PIVOT(COHORT_IMMUNOASSAY_CURATED):
     )
 
     return pivotDF
+"""
 
-
-def measurements_standard_features(
-    HT_WT_standard, COHORT_CBC_VALUES_PIVOT, COHORT_CMP_VALUES_PIVOT, index_range
-):
+def measurements_standard_features(HT_WT_standard, COHORT_CBC_VALUES_PIVOT, COHORT_CMP_VALUES_PIVOT, index_range):
     from re import match
 
     ## Initialize all measurement related features:
@@ -785,7 +872,6 @@ def measurements_standard_features(
 
     return df_feat
 
-
 def measurements_standard_features_final(measurements_standard_features):
     df = measurements_standard_features
     features = df.columns
@@ -797,9 +883,12 @@ def measurements_standard_features_final(measurements_standard_features):
 
     for name in features:
         df_grouped = df_grouped.withColumnRenamed("avg(" + name + ")", name)
+    
+    for feature in features:
+        ## Add Feature value & unit column to the DF if doesn't exist:
+        df_grouped = df_grouped.withColumn( f'{feature}', lit(None).cast('string') )
 
     return df_grouped
-
 
 def Measurements_after(measurements_standard_features_final):
     df = measurements_standard_features_final
@@ -808,7 +897,6 @@ def Measurements_after(measurements_standard_features_final):
 
     return df.filter(df.status_relative_index == "after").select(*features)
 
-
 def Measurements_during(measurements_standard_features_final):
     df = measurements_standard_features_final
     features = df.columns
@@ -816,10 +904,70 @@ def Measurements_during(measurements_standard_features_final):
 
     return df.filter(df.status_relative_index == "during").select(*features)
 
-
-def Measurements_features_before(measurements_standard_features_final):
+def Measurements_before(measurements_standard_features_final):
     df = measurements_standard_features_final
     features = df.columns
     features.remove("status_relative_index")
 
     return df.filter(df.status_relative_index == "before").select(*features)
+
+## MAIN SCRIPT:
+if __name__ == "__main__":
+
+    ## Start a Spark Session:
+    spark = get_spark_session()
+
+    ## File path and directory pathe initializations:
+    lab_set_path = "data/raw_sample/training/measurement.csv"
+    concept_set_path = "data/raw_sample/concept_set_members.csv"
+
+    ## Load measurements data into a spark dataframe:
+    measurement = spark.read.csv(lab_set_path, header=True)
+    measurement = measurement.withColumn("measurement_concept_id", measurement.measurement_concept_id.cast("int"))\
+                    .withColumn("unit_concept_id", measurement.unit_concept_id.cast("int"))
+    #print(f"Column Names: {measurement.columns}")
+    #measurement.show(5)
+    
+    ## Loading the concept members to filter the desired measurements:
+    concept_set_members = spark.read.csv(concept_set_path, header=True)
+    concept_set_members = concept_set_members.withColumn("concept_id", concept_set_members.concept_id.cast("int"))
+    #concept_set_members.show(5)
+
+    ## Height and weight measurements:  
+    # Step 1: Filtering the height and weight measurements:
+    df_ht_wt_curated = get_height_weight_measurements(measurement, concept_set_members)
+    #df_ht_wt_curated.show(5)
+    # Step 2: Pivoting the dataframe and standardising units:
+    df_ht_wt_pivot = COHORT_WT_HT_PIVOT(df_ht_wt_curated)
+    df_ht_wt_standard = HT_WT_standard(df_ht_wt_pivot)
+    #df_ht_wt_standard.show(5)
+
+    ## CBC Panel Measurements:
+    # Step 1: Filtering the height and weight measurements:
+    df_cbc_curated = get_cbc_measurements(measurement, concept_set_members)
+    # Step 2: Pivoting the dataframe and standardising units:
+    df_cbc_pivot = COHORT_CBC_VALUES_PIVOT(df_cbc_curated)
+    #df_cbc_pivot.show()
+
+    ## CBC Panel Measurements:
+    # Step 1: Filtering the height and weight measurements:
+    df_cmp_curated = get_cmp_measurements(measurement, concept_set_members)
+    # Step 2: Pivoting the dataframe and standardising units:
+    df_cmp_pivot = COHORT_CMP_VALUES_PIVOT(df_cmp_curated)
+    #df_cmp_pivot.show()
+
+    ## Index Range and featurizing:
+    index_range = spark.read.csv(
+        "data/intermediate/training/index_range.csv", header=True
+    )
+    df_measurement_features = measurements_standard_features(df_ht_wt_standard, df_cbc_pivot, df_cmp_pivot, index_range)
+    #df_measurement_features.show()
+    df_measurement_features_final = measurements_standard_features_final(df_measurement_features)
+    df_measurement_features_after = Measurements_after(df_measurement_features_final)
+    df_measurement_features_during = Measurements_during(df_measurement_features_final)
+    df_measurement_features_before = Measurements_before(df_measurement_features_final)
+
+    #df_measurement_features_final.show()
+    df_measurement_features_after.show()
+    df_measurement_features_during.show() 
+    df_measurement_features_before.show()
